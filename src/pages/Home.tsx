@@ -8,9 +8,9 @@ import { LogMealSheet } from '../components/LogMealSheet'
 import { ProfileSheet } from '../components/ProfileSheet'
 import { ProgressSheet } from '../components/ProgressSheet'
 import { QuickLogSheet } from '../components/QuickLogSheet'
-import { fetchFeed, fetchFriendStats, fetchMeals, fetchPlan, fetchWorkouts } from '../lib/api'
+import { fetchFeed, fetchFriendships, fetchFriendStats, fetchMeals, fetchPlan, fetchWorkouts, listGroups } from '../lib/api'
 import { toISODate, weekDates } from '../lib/dates'
-import type { FeedEntry, FriendStats, Meal, PlanDay, Profile, Workout } from '../lib/types'
+import type { FeedEntry, FriendStats, Friendship, Group, Meal, PlanDay, Profile, Workout } from '../lib/types'
 import { FriendsFeed } from './FriendsFeed'
 import { MeFeed } from './MeFeed'
 
@@ -30,6 +30,8 @@ export function Home({ profile }: { profile: Profile }) {
   const [meals, setMeals] = useState<Meal[]>([])
   const [feed, setFeed] = useState<FeedEntry[] | null>(null)
   const [friendStats, setFriendStats] = useState<FriendStats[]>([])
+  const [groups, setGroups] = useState<Group[]>([])
+  const [friendships, setFriendships] = useState<Friendship[]>([])
   const [feedLoading, setFeedLoading] = useState(false)
   const [feedError, setFeedError] = useState<string | null>(null)
   const [sheet, setSheet] = useState<SheetName | null>(null)
@@ -52,9 +54,11 @@ export function Home({ profile }: { profile: Profile }) {
   const loadFeed = useCallback(async () => {
     setFeedLoading(true)
     try {
-      const [f, st] = await Promise.all([fetchFeed(), fetchFriendStats()])
+      const [f, st, gs, fr] = await Promise.all([fetchFeed(), fetchFriendStats(), listGroups(), fetchFriendships()])
       setFeed(f)
       setFriendStats(st)
+      setGroups(gs)
+      setFriendships(fr)
       setFeedError(null)
     } catch (err) {
       setFeedError(err instanceof Error ? err.message : 'Could not load friends')
@@ -168,7 +172,17 @@ export function Home({ profile }: { profile: Profile }) {
           />
         </section>
         <section className="h-full w-full shrink-0 snap-start overflow-y-auto">
-          <FriendsFeed feed={feed} stats={friendStats} meId={profile.id} onStatusChanged={loadFeed} loading={feedLoading} error={feedError} />
+          <FriendsFeed
+            feed={feed}
+            stats={friendStats}
+            groups={groups}
+            friendships={friendships}
+            meId={profile.id}
+            isAdmin={!!profile.is_admin}
+            onChanged={loadFeed}
+            loading={feedLoading}
+            error={feedError}
+          />
         </section>
       </div>
 

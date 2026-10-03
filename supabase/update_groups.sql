@@ -1,140 +1,12 @@
--- GymBuddies database schema.
--- Run this once in the Supabase dashboard: SQL Editor -> New query -> paste -> Run.
--- Safe to re-run: everything is created with "if not exists" / "or replace".
---
--- Privacy model:
---   * profiles, workouts, meals and plans are readable/writable ONLY by their owner (RLS).
---   * The shared Friends feed is served by get_feed(), a security-definer function that
---     returns only aggregates: display name, avatar, today's workout status/day type,
---     weekly workout count and today's total calories. Never individual meals or body stats.
---   * You only see people who share a group with you, or who accepted your friend request
---     (visible_people()). Only admins can create groups.
-
--- ---------------------------------------------------------------------------
--- Tables
--- ---------------------------------------------------------------------------
-
-create table if not exists public.profiles (
-  id             uuid primary key references auth.users (id) on delete cascade,
-  display_name   text not null default '',
-  avatar_url     text,
-  weight_kg      numeric(5, 1),
-  height_cm      numeric(5, 1),
-  goal           text not null default 'maintain' check (goal in ('lose', 'maintain', 'gain')),
-  weekly_target  int  not null default 4 check (weekly_target between 1 and 7),
-  split          text not null default 'ppl',
-  calorie_target int  not null default 2200 check (calorie_target between 800 and 8000),
-  timezone       text not null default 'UTC',
-  onboarded      boolean not null default false,
-  created_at     timestamptz not null default now(),
-  updated_at     timestamptz not null default now()
-);
-
--- One row per day of the user's plan, e.g. "Push", "Pull", "Legs".
-create table if not exists public.plan_days (
-  id         uuid primary key default gen_random_uuid(),
-  user_id    uuid not null references auth.users (id) on delete cascade,
-  position   int  not null default 0,
-  name       text not null,
-  -- [{ "name": "Bench Press", "sets": 3, "reps": 8 }]
-  exercises  jsonb not null default '[]'::jsonb,
-  created_at timestamptz not null default now()
-);
--- Banter status shown as a speech bubble on the Friends tab; hidden after 24 hours (see get_feed).
-alter table public.profiles add column if not exists status_text text;
-alter table public.profiles add column if not exists status_at timestamptz;
-alter table public.profiles drop constraint if exists profiles_status_len;
-alter table public.profiles add constraint profiles_status_len check (char_length(status_text) <= 40);
+-- Groups & friends update.
+-- Run once in Supabase: SQL Editor -> New query -> paste all of this -> Run. Safe to re-run.
+-- (Everything except the one-time steps at the bottom is also part of schema.sql.)
 
 -- Admins can create groups. Can't be changed from the app (see profiles_before_write).
 alter table public.profiles add column if not exists is_admin boolean not null default false;
 
-create index if not exists plan_days_user_idx on public.plan_days (user_id, position);
-
-create table if not exists public.workouts (
-  id           uuid primary key default gen_random_uuid(),
-  user_id      uuid not null references auth.users (id) on delete cascade,
-  -- The user's own calendar date when they trained (friends live in different time zones).
-  local_date   date not null,
-  day_name     text not null,
-  -- [{ "name": "Bench Press", "sets": 3, "reps": 8, "weight_kg": 60, "done": true }]
-  exercises    jsonb not null default '[]'::jsonb,
-  duration_min int check (duration_min between 0 and 600),
-  notes        text,
-  created_at   timestamptz not null default now()
-);
-create index if not exists workouts_user_date_idx on public.workouts (user_id, local_date);
-
-create table if not exists public.meals (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     uuid not null references auth.users (id) on delete cascade,
-  local_date  date not null,
-  name        text not null,
-  -- [{ "name": "Rice", "quantity": "1 cup", "calories": 200, ... }]
-  items       jsonb not null default '[]'::jsonb,
-  calories    int not null check (calories between 0 and 10000),
-  protein_g   int not null default 0,
-  carbs_g     int not null default 0,
-  fat_g       int not null default 0,
-  created_at  timestamptz not null default now()
-);
-create index if not exists meals_user_date_idx on public.meals (user_id, local_date);
-
--- Daily counter for AI meal analyses, so the monthly API bill stays predictable.
-create table if not exists public.ai_usage (
-  user_id uuid not null references auth.users (id) on delete cascade,
-  day     date not null,
-  count   int  not null default 0,
-  primary key (user_id, day)
-);
 -- New meals analysed today (corrections in the same chat don't count).
 alter table public.ai_usage add column if not exists meals int not null default 0;
-
--- ---------------------------------------------------------------------------
--- Row level security: owner-only everywhere
--- ---------------------------------------------------------------------------
-
-alter table public.profiles  enable row level security;
-alter table public.plan_days enable row level security;
-alter table public.workouts  enable row level security;
-alter table public.meals     enable row level security;
-alter table public.ai_usage  enable row level security;
-
-drop policy if exists "own profile" on public.profiles;
-create policy "own profile" on public.profiles
-  for all to authenticated using (id = auth.uid()) with check (id = auth.uid());
-
-drop policy if exists "own plan" on public.plan_days;
-create policy "own plan" on public.plan_days
-  for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
-
-drop policy if exists "own workouts" on public.workouts;
-create policy "own workouts" on public.workouts
-  for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
-
-drop policy if exists "own meals" on public.meals;
-create policy "own meals" on public.meals
-  for all to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
-
--- ai_usage has no policies: only the security-definer function below touches it.
-
--- ---------------------------------------------------------------------------
--- Triggers
--- ---------------------------------------------------------------------------
-
--- Create an empty profile row as soon as someone signs up.
-create or replace function public.handle_new_user()
-returns trigger language plpgsql security definer set search_path = public as $$
-begin
-  insert into public.profiles (id) values (new.id) on conflict do nothing;
-  return new;
-end;
-$$;
-
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute function public.handle_new_user();
 
 -- Reject invalid time zone names (get_feed relies on them) and keep updated_at fresh.
 create or replace function public.profiles_before_write()
@@ -370,10 +242,6 @@ $$;
 revoke all on function public.get_friendships() from public, anon;
 grant execute on function public.get_friendships() to authenticated;
 
--- ---------------------------------------------------------------------------
--- Shared feed (aggregates only)
--- ---------------------------------------------------------------------------
-
 drop function if exists public.get_feed();
 create function public.get_feed()
 returns table (
@@ -451,11 +319,6 @@ $$;
 
 revoke all on function public.get_feed() from public, anon;
 grant execute on function public.get_feed() to authenticated;
-
--- ---------------------------------------------------------------------------
--- Friend stats: strength trend + inputs for fun tags (aggregates only).
--- Also in update_friends.sql for existing projects.
--- ---------------------------------------------------------------------------
 
 drop function if exists public.get_friend_stats();
 create function public.get_friend_stats()
@@ -649,29 +512,18 @@ revoke all on function public.consume_ai_credit(boolean) from public, anon;
 grant execute on function public.consume_ai_credit(boolean) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- Storage: public bucket for profile pictures, each user writes only their own folder.
--- (Meal photos are never stored - they're sent to the AI once and discarded.)
+-- One-time steps for the existing project
 -- ---------------------------------------------------------------------------
 
-insert into storage.buckets (id, name, public)
-values ('avatars', 'avatars', true)
-on conflict (id) do nothing;
+-- Everyone who has already signed up joins MH14 boyz (gym baddies starts empty).
+insert into public.group_members (group_id, user_id)
+select g.id, p.id
+from public.groups g
+cross join public.profiles p
+where g.name = 'MH14 boyz' and p.onboarded
+on conflict do nothing;
 
-drop policy if exists "avatar read" on storage.objects;
-create policy "avatar read" on storage.objects
-  for select to authenticated using (bucket_id = 'avatars');
-
-drop policy if exists "avatar upload own folder" on storage.objects;
-create policy "avatar upload own folder" on storage.objects
-  for insert to authenticated
-  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
-
-drop policy if exists "avatar update own folder" on storage.objects;
-create policy "avatar update own folder" on storage.objects
-  for update to authenticated
-  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
-
-drop policy if exists "avatar delete own folder" on storage.objects;
-create policy "avatar delete own folder" on storage.objects
-  for delete to authenticated
-  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+-- Make Adwait the admin (the only person who can create groups):
+-- replace the email below with the one Adwait signs in with before running.
+update public.profiles set is_admin = true
+where id = (select id from auth.users where lower(email) = lower('ADWAIT-EMAIL-HERE'));

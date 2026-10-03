@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import { resizeImage } from './image'
-import type { FeedEntry, FriendStats, Meal, MealEstimate, PlanDay, Profile, Workout, WorkoutExercise } from './types'
+import type { FeedEntry, FriendStats, Friendship, Group, Meal, MealEstimate, PlanDay, Profile, UserSearchResult, Workout, WorkoutExercise } from './types'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -138,4 +138,52 @@ export async function analyzeMeal(turns: ChatTurn[]): Promise<MealEstimate> {
   const body = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`)
   return body as MealEstimate
+}
+
+// --- Groups & friends ----------------------------------------------------------------
+
+/** All groups with member counts. Returns [] if the groups update isn't installed yet. */
+export async function listGroups(): Promise<Group[]> {
+  const { data, error } = await supabase.rpc('list_groups')
+  if (error) {
+    console.warn('list_groups unavailable:', error.message)
+    return []
+  }
+  return data as Group[]
+}
+
+export async function joinGroup(groupId: string): Promise<void> {
+  const id = await uid()
+  check(await supabase.from('group_members').upsert({ group_id: groupId, user_id: id }, { ignoreDuplicates: true }))
+}
+
+/** Admins only (enforced by the database). */
+export async function createGroup(name: string): Promise<void> {
+  const id = await uid()
+  check(await supabase.from('groups').insert({ name: name.trim(), created_by: id }))
+}
+
+export async function searchUsers(q: string): Promise<UserSearchResult[]> {
+  return check(await supabase.rpc('search_users', { q })) as UserSearchResult[]
+}
+
+export async function sendFriendRequest(userId: string): Promise<'requested' | 'friends'> {
+  return check(await supabase.rpc('send_friend_request', { target: userId })) as 'requested' | 'friends'
+}
+
+export async function respondFriendRequest(userId: string, accept: boolean): Promise<void> {
+  check(await supabase.rpc('respond_friend_request', { requester_id: userId, accept }))
+}
+
+export async function removeFriend(userId: string): Promise<void> {
+  check(await supabase.rpc('remove_friend', { other: userId }))
+}
+
+export async function fetchFriendships(): Promise<Friendship[]> {
+  const { data, error } = await supabase.rpc('get_friendships')
+  if (error) {
+    console.warn('get_friendships unavailable:', error.message)
+    return []
+  }
+  return data as Friendship[]
 }
