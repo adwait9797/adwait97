@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import { resizeImage } from './image'
-import type { FeedEntry, FriendStats, Friendship, Group, Meal, MealEstimate, PlanDay, Profile, UserSearchResult, Workout, WorkoutExercise } from './types'
+import type { AdminUser, FeedEntry, FriendStats, Friendship, Group, Meal, MealEstimate, PlanDay, Profile, UserSearchResult, Workout, WorkoutExercise } from './types'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -152,9 +152,19 @@ export async function listGroups(): Promise<Group[]> {
   return data as Group[]
 }
 
-export async function joinGroup(groupId: string): Promise<void> {
+/** Ask to join a group; an admin approves it. */
+export async function requestJoinGroup(groupId: string): Promise<void> {
   const id = await uid()
-  check(await supabase.from('group_members').upsert({ group_id: groupId, user_id: id }, { ignoreDuplicates: true }))
+  check(
+    await supabase
+      .from('group_join_requests')
+      .upsert({ group_id: groupId, user_id: id }, { onConflict: 'group_id,user_id', ignoreDuplicates: true }),
+  )
+}
+
+export async function cancelJoinRequest(groupId: string): Promise<void> {
+  const id = await uid()
+  check(await supabase.from('group_join_requests').delete().eq('group_id', groupId).eq('user_id', id))
 }
 
 /** Admins only (enforced by the database). */
@@ -186,4 +196,30 @@ export async function fetchFriendships(): Promise<Friendship[]> {
     return []
   }
   return data as Friendship[]
+}
+
+// --- Admin (every call is checked by the database) ---------------------------------------
+
+export async function adminUsers(): Promise<AdminUser[]> {
+  return check(await supabase.rpc('admin_users')) as AdminUser[]
+}
+
+export async function adminReviewRequest(groupId: string, userId: string, approve: boolean): Promise<void> {
+  check(await supabase.rpc('admin_review_request', { p_group: groupId, p_user: userId, approve }))
+}
+
+export async function adminAddMember(groupId: string, userId: string): Promise<void> {
+  check(await supabase.rpc('admin_add_member', { p_group: groupId, p_user: userId }))
+}
+
+export async function adminRemoveMember(groupId: string, userId: string): Promise<void> {
+  check(await supabase.rpc('admin_remove_member', { p_group: groupId, p_user: userId }))
+}
+
+export async function renameGroup(groupId: string, name: string): Promise<void> {
+  check(await supabase.from('groups').update({ name: name.trim() }).eq('id', groupId))
+}
+
+export async function deleteGroup(groupId: string): Promise<void> {
+  check(await supabase.from('groups').delete().eq('id', groupId))
 }

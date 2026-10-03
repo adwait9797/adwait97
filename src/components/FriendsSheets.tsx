@@ -1,6 +1,6 @@
 import { Button, Link, Navbar, Page, Popup, Preloader, Sheet } from 'konsta/react'
 import { useEffect, useState } from 'react'
-import { createGroup, joinGroup, removeFriend, respondFriendRequest, searchUsers, sendFriendRequest } from '../lib/api'
+import { cancelJoinRequest, createGroup, removeFriend, requestJoinGroup, respondFriendRequest, searchUsers, sendFriendRequest } from '../lib/api'
 import type { Friendship, Group, Relation, UserSearchResult } from '../lib/types'
 import { Avatar } from './Avatar'
 import { IconCheck } from './icons'
@@ -288,7 +288,7 @@ export function NewGroupSheet({ opened, onClose, onCreated }: { opened: boolean;
   )
 }
 
-/** For people who aren't in any group yet. */
+/** For people who aren't in any group yet: ask to join (an admin approves). */
 export function JoinGroupSheet({
   opened,
   groups,
@@ -303,15 +303,15 @@ export function JoinGroupSheet({
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  async function join(id: string) {
-    setBusyId(id)
+  async function toggle(g: Group) {
+    setBusyId(g.id)
     setError(null)
     try {
-      await joinGroup(id)
+      if (g.requested) await cancelJoinRequest(g.id)
+      else await requestJoinGroup(g.id)
       onJoined()
-      onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not join')
+      setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
       setBusyId(null)
     }
@@ -321,27 +321,38 @@ export function JoinGroupSheet({
     <Sheet opened={opened} onBackdropClick={onClose} className="rounded-t-3xl bg-card!">
       <div className="pb-safe space-y-4 px-4 pt-3">
         <div className="mx-auto h-1.5 w-10 rounded-full bg-white/25" />
-        <h2 className="text-[22px] font-bold">Join a group</h2>
+        <div>
+          <h2 className="text-[22px] font-bold">Join a group</h2>
+          <p className="text-[14px] text-muted">Adwait approves new members. You'll see the group once you're in.</p>
+        </div>
         {error && <p className="text-center text-sm text-move">{error}</p>}
         <div className="space-y-2">
-          {groups.map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              disabled={busyId !== null}
-              onClick={() => join(g.id)}
-              className="flex w-full items-center gap-3 rounded-2xl bg-card-2 p-4 text-left active:bg-white/10"
-            >
-              <span className="text-[22px]">👥</span>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[17px] font-semibold">{g.name}</div>
-                <div className="text-[13px] text-muted">
-                  {g.member_count} member{g.member_count === 1 ? '' : 's'}
+          {groups
+            .filter((g) => !g.is_member)
+            .map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                disabled={busyId !== null}
+                onClick={() => toggle(g)}
+                className="flex w-full items-center gap-3 rounded-2xl bg-card-2 p-4 text-left active:bg-white/10"
+              >
+                <span className="text-[22px]">👥</span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[17px] font-semibold">{g.name}</div>
+                  <div className="text-[13px] text-muted">
+                    {g.requested ? 'Waiting for approval · tap to cancel' : `${g.member_count} member${g.member_count === 1 ? '' : 's'}`}
+                  </div>
                 </div>
-              </div>
-              {busyId === g.id ? <Preloader className="h-5! w-5!" /> : <span className="text-primary">Join</span>}
-            </button>
-          ))}
+                {busyId === g.id ? (
+                  <Preloader className="h-5! w-5!" />
+                ) : g.requested ? (
+                  <span className="text-muted">Requested</span>
+                ) : (
+                  <span className="text-primary">Request</span>
+                )}
+              </button>
+            ))}
         </div>
       </div>
     </Sheet>

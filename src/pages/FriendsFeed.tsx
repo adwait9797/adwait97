@@ -3,7 +3,8 @@ import { useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { IconDumbbell, IconFlame, IconTrophy } from '../components/icons'
 import { Seg } from '../components/Seg'
-import { FriendsSheet, JoinGroupSheet, NewGroupSheet } from '../components/FriendsSheets'
+import { AdminSheet } from '../components/AdminSheet'
+import { FriendsSheet, JoinGroupSheet } from '../components/FriendsSheets'
 import { StatusSheet } from '../components/StatusSheet'
 import { respondFriendRequest } from '../lib/api'
 import { tagsFor, type Tag } from '../lib/badges'
@@ -225,6 +226,7 @@ export function FriendsFeed({
   friendships,
   meId,
   isAdmin,
+  adminRequests,
   loading,
   error,
   onChanged,
@@ -236,12 +238,14 @@ export function FriendsFeed({
   friendships: Friendship[]
   meId: string
   isAdmin: boolean
+  /** Pending group join requests (admins only). */
+  adminRequests: number
   loading: boolean
   error: string | null
   /** Reload the feed after a status, friend or group change. */
   onChanged: () => void
 }) {
-  const [sheet, setSheet] = useState<'status' | 'friends' | 'newGroup' | 'joinGroup' | null>(null)
+  const [sheet, setSheet] = useState<'status' | 'friends' | 'admin' | 'joinGroup' | null>(null)
   const [openTag, setOpenTag] = useState<{ tag: Tag; who: string } | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
 
@@ -341,13 +345,30 @@ export function FriendsFeed({
 
       {legacy && <Circle people={feed} stats={stats} meId={meId} pad="px-4" onTag={onTag} />}
 
+      {/* Waiting for an admin to approve a join request */}
+      {!legacy &&
+        groups
+          .filter((g) => g.requested && !g.is_member)
+          .map((g) => (
+            <section key={g.id} className="mx-4 flex items-center gap-3 rounded-2xl bg-card p-4">
+              <span className="text-[26px]">⏳</span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[16px] font-semibold">Waiting to join {g.name}</div>
+                <div className="text-[13px] text-muted">Adwait will approve your request soon.</div>
+              </div>
+              <button type="button" onClick={() => setSheet('joinGroup')} className="shrink-0 text-[14px] text-muted">
+                Manage
+              </button>
+            </section>
+          ))}
+
       {!legacy && myGroups.length === 0 && outsideFriends.length === 0 && (
         <section className="mx-4 rounded-3xl bg-card px-5 py-8 text-center">
           <div className="text-[40px]">👥</div>
           <h2 className="mt-2 text-[20px] font-bold">No crew yet</h2>
           <p className="mt-1 text-[15px] text-muted">Join a group or add a friend to see each other's progress.</p>
           <div className="mt-4 flex justify-center gap-2">
-            {groups.length > 0 && (
+            {groups.some((g) => !g.is_member && !g.requested) && (
               <button type="button" onClick={() => setSheet('joinGroup')} className="rounded-full bg-primary px-4 py-2 font-semibold text-black">
                 Join a group
               </button>
@@ -361,8 +382,17 @@ export function FriendsFeed({
 
       {isAdmin && (
         <div className="flex justify-end px-4">
-          <button type="button" onClick={() => setSheet('newGroup')} className="text-[14px] font-semibold text-primary">
-            + New group
+          <button
+            type="button"
+            onClick={() => setSheet('admin')}
+            className="relative rounded-full bg-white/10 px-3 py-1.5 text-[14px] font-semibold active:bg-white/20"
+          >
+            🛡 Admin
+            {adminRequests > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-move px-1 text-[11px] font-bold">
+                {adminRequests}
+              </span>
+            )}
           </button>
         </div>
       )}
@@ -409,7 +439,7 @@ export function FriendsFeed({
         onSaved={onChanged}
       />
       <FriendsSheet opened={sheet === 'friends'} friendships={friendships} onClose={() => setSheet(null)} onChanged={onChanged} />
-      <NewGroupSheet opened={sheet === 'newGroup'} onClose={() => setSheet(null)} onCreated={onChanged} />
+      {isAdmin && <AdminSheet opened={sheet === 'admin'} onClose={() => setSheet(null)} onChanged={onChanged} />}
       <JoinGroupSheet opened={sheet === 'joinGroup'} groups={groups} onClose={() => setSheet(null)} onJoined={onChanged} />
 
       <Dialog

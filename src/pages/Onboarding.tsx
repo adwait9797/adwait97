@@ -5,7 +5,7 @@ import { IconCamera, IconCheck } from '../components/icons'
 import { NumStepper } from '../components/NumStepper'
 import { PlanEditor } from '../components/PlanEditor'
 import { Seg } from '../components/Seg'
-import { joinGroup, listGroups, savePlan, saveProfile, uploadAvatar } from '../lib/api'
+import { listGroups, requestJoinGroup, savePlan, saveProfile, uploadAvatar } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { deviceTimezone } from '../lib/dates'
 import { planFromTemplate, recommendedSplit, SPLITS, suggestCalories } from '../lib/exercises'
@@ -84,7 +84,10 @@ export function Onboarding() {
       const avatar_url = photo ? await uploadAvatar(photo) : (profile?.avatar_url ?? null)
       await savePlan(plan)
       const chosenGroup = groups?.find((g) => g.id === groupId)
-      if (chosenGroup && !chosenGroup.is_member) await joinGroup(chosenGroup.id)
+      if (chosenGroup && !chosenGroup.is_member) {
+        // Never block finishing sign-up on this; they can request again from the Friends tab.
+        await requestJoinGroup(chosenGroup.id).catch((err) => console.warn('Join request failed:', err))
+      }
       const p = await saveProfile({
         display_name: name.trim(),
         avatar_url,
@@ -167,7 +170,7 @@ export function Onboarding() {
 
         {step === 1 && (
           <>
-            <Header title="Pick your group" subtitle="You'll see everyone in your group on the Friends tab, and they'll see you." />
+            <Header title="Pick your group" subtitle="Adwait approves new members. Once you're in, you'll see your group on the Friends tab." />
             <div className="space-y-3 px-4">
               {groups === null && <p className="text-center text-muted">Loading groups…</p>}
               {groups?.length === 0 && (

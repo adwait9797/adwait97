@@ -8,7 +8,7 @@ import { LogMealSheet } from '../components/LogMealSheet'
 import { ProfileSheet } from '../components/ProfileSheet'
 import { ProgressSheet } from '../components/ProgressSheet'
 import { QuickLogSheet } from '../components/QuickLogSheet'
-import { fetchFeed, fetchFriendships, fetchFriendStats, fetchMeals, fetchPlan, fetchWorkouts, listGroups } from '../lib/api'
+import { adminUsers, fetchFeed, fetchFriendships, fetchFriendStats, fetchMeals, fetchPlan, fetchWorkouts, listGroups } from '../lib/api'
 import { toISODate, weekDates } from '../lib/dates'
 import type { FeedEntry, FriendStats, Friendship, Group, Meal, PlanDay, Profile, Workout } from '../lib/types'
 import { FriendsFeed } from './FriendsFeed'
@@ -32,6 +32,7 @@ export function Home({ profile }: { profile: Profile }) {
   const [friendStats, setFriendStats] = useState<FriendStats[]>([])
   const [groups, setGroups] = useState<Group[]>([])
   const [friendships, setFriendships] = useState<Friendship[]>([])
+  const [adminRequests, setAdminRequests] = useState(0)
   const [feedLoading, setFeedLoading] = useState(false)
   const [feedError, setFeedError] = useState<string | null>(null)
   const [sheet, setSheet] = useState<SheetName | null>(null)
@@ -59,6 +60,11 @@ export function Home({ profile }: { profile: Profile }) {
       setFriendStats(st)
       setGroups(gs)
       setFriendships(fr)
+      if (profile.is_admin) {
+        adminUsers()
+          .then((us) => setAdminRequests(us.reduce((n, u) => n + u.requested_group_ids.length, 0)))
+          .catch(() => setAdminRequests(0))
+      }
       setFeedError(null)
     } catch (err) {
       setFeedError(err instanceof Error ? err.message : 'Could not load friends')
@@ -179,6 +185,7 @@ export function Home({ profile }: { profile: Profile }) {
             friendships={friendships}
             meId={profile.id}
             isAdmin={!!profile.is_admin}
+            adminRequests={adminRequests}
             onChanged={loadFeed}
             loading={feedLoading}
             error={feedError}
