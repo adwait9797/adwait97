@@ -101,3 +101,20 @@ export interface FeedEntry {
   under_target_today: boolean
   week_under_target: number
 }
+
+/** One row of get_friend_stats(): aggregates behind the strength trend and fun tags. */
+export interface FriendStats {
+  user_id: string
+  /** Median % change in best estimated 1RM, last 14 days vs the 28 days before. null = not enough data. */
+  strength_pct: number | null
+  compared_exercises: number
+  prs_14d: number
+  top_exercise: string | null
+  top_exercise_sessions: number
+  top_split: string | null
+  top_split_sessions: number
+  early_sessions: number
+  late_sessions: number
+  leg_weeks: number
+  volume_7d: number
+}

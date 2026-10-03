@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import { resizeImage } from './image'
-import type { FeedEntry, Meal, MealEstimate, PlanDay, Profile, Workout, WorkoutExercise } from './types'
+import type { FeedEntry, FriendStats, Meal, MealEstimate, PlanDay, Profile, Workout, WorkoutExercise } from './types'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -105,6 +105,16 @@ export async function deleteMeal(id: string): Promise<void> {
 
 export async function fetchFeed(): Promise<FeedEntry[]> {
   return check(await supabase.rpc('get_feed')) as FeedEntry[]
+}
+
+/** Strength trend and tag inputs. Optional: returns [] if the SQL function isn't installed yet. */
+export async function fetchFriendStats(): Promise<FriendStats[]> {
+  const { data, error } = await supabase.rpc('get_friend_stats')
+  if (error) {
+    console.warn('get_friend_stats unavailable:', error.message)
+    return []
+  }
+  return (data as FriendStats[]).map((r) => ({ ...r, strength_pct: r.strength_pct === null ? null : Number(r.strength_pct), volume_7d: Number(r.volume_7d) }))
 }
 
 // --- AI meal analysis -----------------------------------------------------------------
