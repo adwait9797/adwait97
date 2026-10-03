@@ -44,6 +44,8 @@ A mobile-first web app for a group of friends (in different countries) to track 
 
 3. **Deploy**. Share the `https://<name>.vercel.app` link with your friends.
 
+**Custom domain:** the app lives at `https://gymbuddies.ak97.in` (CNAME in Squarespace DNS → Vercel). `vercel.json` permanently redirects the old `adwait97.vercel.app` address there; preview deployments are unaffected.
+
 On iPhone: open the link in Safari → Share → **Add to Home Screen**. It then opens full-screen like a native app.
 
 ---
