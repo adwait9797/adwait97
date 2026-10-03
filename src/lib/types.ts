@@ -27,9 +27,20 @@ export interface PlanDay {
   exercises: PlanExercise[]
 }
 
+/** One logged set during a live workout. weight_kg is null for bodyweight exercises. */
+export interface SetEntry {
+  weight_kg: number | null
+  reps: number
+}
+
+/**
+ * Stored in workouts.exercises (jsonb). Live workouts also store every set in set_log;
+ * sets/reps/weight_kg are kept as a summary (set count, last reps, top weight).
+ */
 export interface WorkoutExercise extends PlanExercise {
   weight_kg: number | null
   done: boolean
+  set_log?: SetEntry[]
 }
 
 export interface Workout {

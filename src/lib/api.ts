@@ -61,15 +61,11 @@ export async function savePlan(days: PlanDay[]): Promise<void> {
 
 // --- Workouts --------------------------------------------------------------------
 
-export async function fetchWorkouts(fromDate: string): Promise<Workout[]> {
-  return check(
-    await supabase
-      .from('workouts')
-      .select('*')
-      .gte('local_date', fromDate)
-      .order('local_date', { ascending: false })
-      .order('created_at', { ascending: false }),
-  ) as Workout[]
+/** Workouts with local_date in [fromDate, toDate] (toDate optional), newest first. */
+export async function fetchWorkouts(fromDate: string, toDate?: string): Promise<Workout[]> {
+  let q = supabase.from('workouts').select('*').gte('local_date', fromDate)
+  if (toDate) q = q.lte('local_date', toDate)
+  return check(await q.order('local_date', { ascending: false }).order('created_at', { ascending: false })) as Workout[]
 }
 
 export async function addWorkout(w: {
@@ -89,14 +85,11 @@ export async function deleteWorkout(id: string): Promise<void> {
 
 // --- Meals -----------------------------------------------------------------------
 
-export async function fetchMeals(fromDate: string): Promise<Meal[]> {
-  return check(
-    await supabase
-      .from('meals')
-      .select('*')
-      .gte('local_date', fromDate)
-      .order('created_at', { ascending: false }),
-  ) as Meal[]
+/** Meals with local_date in [fromDate, toDate] (toDate optional), newest first. */
+export async function fetchMeals(fromDate: string, toDate?: string): Promise<Meal[]> {
+  let q = supabase.from('meals').select('*').gte('local_date', fromDate)
+  if (toDate) q = q.lte('local_date', toDate)
+  return check(await q.order('local_date', { ascending: false }).order('created_at', { ascending: false })) as Meal[]
 }
 
 export async function addMeal(m: Omit<Meal, 'id' | 'created_at'>): Promise<void> {
