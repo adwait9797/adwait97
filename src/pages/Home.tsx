@@ -8,9 +8,9 @@ import { LogMealSheet } from '../components/LogMealSheet'
 import { ProfileSheet } from '../components/ProfileSheet'
 import { ProgressSheet } from '../components/ProgressSheet'
 import { QuickLogSheet } from '../components/QuickLogSheet'
-import { fetchFeed, fetchMeals, fetchPlan, fetchWorkouts } from '../lib/api'
+import { fetchFeed, fetchFriendStats, fetchMeals, fetchPlan, fetchWorkouts } from '../lib/api'
 import { toISODate, weekDates } from '../lib/dates'
-import type { FeedEntry, Meal, PlanDay, Profile, Workout } from '../lib/types'
+import type { FeedEntry, FriendStats, Meal, PlanDay, Profile, Workout } from '../lib/types'
 import { FriendsFeed } from './FriendsFeed'
 import { MeFeed } from './MeFeed'
 
@@ -29,6 +29,7 @@ export function Home({ profile }: { profile: Profile }) {
   const [workouts, setWorkouts] = useState<Workout[]>([])
   const [meals, setMeals] = useState<Meal[]>([])
   const [feed, setFeed] = useState<FeedEntry[] | null>(null)
+  const [friendStats, setFriendStats] = useState<FriendStats[]>([])
   const [feedLoading, setFeedLoading] = useState(false)
   const [feedError, setFeedError] = useState<string | null>(null)
   const [sheet, setSheet] = useState<SheetName | null>(null)
@@ -51,7 +52,9 @@ export function Home({ profile }: { profile: Profile }) {
   const loadFeed = useCallback(async () => {
     setFeedLoading(true)
     try {
-      setFeed(await fetchFeed())
+      const [f, st] = await Promise.all([fetchFeed(), fetchFriendStats()])
+      setFeed(f)
+      setFriendStats(st)
       setFeedError(null)
     } catch (err) {
       setFeedError(err instanceof Error ? err.message : 'Could not load friends')
@@ -165,7 +168,7 @@ export function Home({ profile }: { profile: Profile }) {
           />
         </section>
         <section className="h-full w-full shrink-0 snap-start overflow-y-auto">
-          <FriendsFeed feed={feed} meId={profile.id} loading={feedLoading} error={feedError} />
+          <FriendsFeed feed={feed} stats={friendStats} meId={profile.id} onStatusChanged={loadFeed} loading={feedLoading} error={feedError} />
         </section>
       </div>
 
