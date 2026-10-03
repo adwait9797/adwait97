@@ -2,15 +2,32 @@ import { Block, Button, List, ListInput, Page, Preloader } from 'konsta/react'
 import { useState, type FormEvent } from 'react'
 import { Logo } from '../components/Logo'
 import { Seg } from '../components/Seg'
-import { supabase } from '../lib/supabase'
+import { authLinkError, supabase } from '../lib/supabase'
 
 export function AuthPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(authLinkError)
   const [notice, setNotice] = useState<string | null>(null)
+  const [forgot, setForgot] = useState(false)
+
+  async function sendReset(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setNotice(null)
+    setBusy(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin })
+      if (error) throw error
+      setNotice('If an account exists for that email, a reset link is on its way. Check your inbox (and spam).')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send the reset email')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -54,46 +71,96 @@ export function AuthPage() {
           </p>
         </div>
 
-        <Block className="mt-8!">
-          <Seg
-            value={mode}
-            onChange={setMode}
-            options={[
-              { value: 'login', label: 'Log in' },
-              { value: 'register', label: 'Register' },
-            ]}
-          />
-        </Block>
-
-        <form onSubmit={submit}>
-          <List strongIos insetIos>
-            <ListInput
-              label="Email"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              autoComplete="email"
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+        {forgot ? (
+          <form onSubmit={sendReset} className="mt-8">
+            <h2 className="px-4 text-center text-[22px] font-bold">Reset your password</h2>
+            <p className="mt-1 px-8 text-center text-[15px] text-muted">We'll email you a link to set a new one.</p>
+            <List strongIos insetIos>
+              <ListInput
+                label="Email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                autoComplete="email"
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+              />
+            </List>
+            {error && <p className="px-8 text-center text-sm text-move">{error}</p>}
+            {notice && <p className="px-8 text-center text-sm text-stand">{notice}</p>}
+            <Block>
+              <Button large rounded type="submit" disabled={busy || !email.trim()} className="font-semibold text-black">
+                {busy ? <Preloader className="h-5! w-5!" /> : 'Send reset link'}
+              </Button>
+            </Block>
+            <button
+              type="button"
+              className="mx-auto block text-[15px] text-primary"
+              onClick={() => {
+                setForgot(false)
+                setError(null)
+                setNotice(null)
+              }}
+            >
+              Back to log in
+            </button>
+          </form>
+        ) : (
+          <>
+          <Block className="mt-8!">
+            <Seg
+              value={mode}
+              onChange={setMode}
+              options={[
+                { value: 'login', label: 'Log in' },
+                { value: 'register', label: 'Register' },
+              ]}
             />
-            <ListInput
-              label="Password"
-              type="password"
-              placeholder={mode === 'register' ? 'At least 6 characters' : 'Your password'}
-              value={password}
-              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-            />
-          </List>
-
-          {error && <p className="px-8 text-center text-sm text-move">{error}</p>}
-          {notice && <p className="px-8 text-center text-sm text-stand">{notice}</p>}
-
-          <Block>
-            <Button large rounded type="submit" disabled={busy || !email || !password} className="font-semibold text-black">
-              {busy ? <Preloader className="h-5! w-5!" /> : mode === 'login' ? 'Log in' : 'Create account'}
-            </Button>
           </Block>
-        </form>
+
+          <form onSubmit={submit}>
+            <List strongIos insetIos>
+              <ListInput
+                label="Email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                autoComplete="email"
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+              />
+              <ListInput
+                label="Password"
+                type="password"
+                placeholder={mode === 'register' ? 'At least 6 characters' : 'Your password'}
+                value={password}
+                autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+              />
+            </List>
+
+            {error && <p className="px-8 text-center text-sm text-move">{error}</p>}
+            {notice && <p className="px-8 text-center text-sm text-stand">{notice}</p>}
+
+            <Block>
+              <Button large rounded type="submit" disabled={busy || !email || !password} className="font-semibold text-black">
+                {busy ? <Preloader className="h-5! w-5!" /> : mode === 'login' ? 'Log in' : 'Create account'}
+              </Button>
+            </Block>
+            {mode === 'login' && (
+              <button
+                type="button"
+                className="mx-auto block text-[15px] text-primary"
+                onClick={() => {
+                  setForgot(true)
+                  setError(null)
+                  setNotice(null)
+                }}
+              >
+                Forgot password?
+              </button>
+            )}
+          </form>
+          </>
+        )}
       </div>
     </Page>
   )

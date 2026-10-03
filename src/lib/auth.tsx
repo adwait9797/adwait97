@@ -2,13 +2,16 @@ import type { Session } from '@supabase/supabase-js'
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { fetchProfile, saveProfile } from './api'
 import { deviceTimezone } from './dates'
-import { supabase } from './supabase'
+import { openedFromRecoveryLink, supabase } from './supabase'
 import type { Profile } from './types'
 
 interface AuthState {
   session: Session | null
   profile: Profile | null
   loading: boolean
+  /** Signed in via a password-reset link: the app must ask for a new password. */
+  recovery: boolean
+  endRecovery: () => void
   refreshProfile: () => Promise<void>
   setProfile: (p: Profile) => void
   signOut: () => Promise<void>
@@ -20,6 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [recovery, setRecovery] = useState(openedFromRecoveryLink)
 
   const loadProfile = useCallback(async (s: Session | null) => {
     if (!s) {
@@ -49,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       setSession(s)
+      if (event === 'PASSWORD_RECOVERY') setRecovery(true)
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'USER_UPDATED') {
         // Defer: calling Supabase inside this callback can deadlock the auth lock.
         setTimeout(() => {
@@ -66,11 +71,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     profile,
     loading,
+    recovery,
+    endRecovery: () => setRecovery(false),
     refreshProfile: () => loadProfile(session),
     setProfile,
     signOut: async () => {
       await supabase.auth.signOut()
       setProfile(null)
+      setRecovery(false)
     },
   }
 

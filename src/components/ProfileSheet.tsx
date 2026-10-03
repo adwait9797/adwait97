@@ -7,6 +7,7 @@ import type { Goal, PlanDay, Profile } from '../lib/types'
 import { Avatar } from './Avatar'
 import { IconCamera } from './icons'
 import { PlanEditor } from './PlanEditor'
+import { SetPasswordForm } from './SetPasswordForm'
 import { Seg } from './Seg'
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -34,6 +35,8 @@ export function ProfileSheet({
   const [photo, setPhoto] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [planOpen, setPlanOpen] = useState(false)
+  const [passwordOpen, setPasswordOpen] = useState(false)
+  const [passwordSaved, setPasswordSaved] = useState(false)
   const [plan, setPlan] = useState<PlanDay[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -194,6 +197,14 @@ export function ProfileSheet({
 
         <List strongIos insetIos>
           <ListButton onClick={openPlan}>Edit workout plan ({splitById(draft.split).name})</ListButton>
+          <ListButton
+            onClick={() => {
+              setPasswordSaved(false)
+              setPasswordOpen(true)
+            }}
+          >
+            Change password
+          </ListButton>
         </List>
         <div className="mx-4 mb-4">
           <button
@@ -211,6 +222,21 @@ export function ProfileSheet({
           Weight, height and individual meals are private. Friends see your name, photo, workouts and daily calorie
           total.
         </p>
+
+        <Popup opened={passwordOpen} onBackdropClick={() => setPasswordOpen(false)}>
+          <Page>
+            <Navbar title="Change Password" right={<Link onClick={() => setPasswordOpen(false)}>Done</Link>} />
+            <div className="px-4 py-6">
+              {passwordSaved ? (
+                <p className="rounded-2xl bg-card px-4 py-5 text-center text-[16px]">
+                  Password updated. Use it next time you log in.
+                </p>
+              ) : (
+                passwordOpen && <SetPasswordForm submitLabel="Update password" onDone={() => setPasswordSaved(true)} />
+              )}
+            </div>
+          </Page>
+        </Popup>
 
         <Popup opened={planOpen} onBackdropClick={() => setPlanOpen(false)}>
           <Page>
