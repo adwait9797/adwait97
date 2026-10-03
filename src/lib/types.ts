@@ -46,6 +46,16 @@ export interface WorkoutExercise extends PlanExercise {
   weight_kg: number | null
   done: boolean
   set_log?: SetEntry[]
+  /** Cardio logs (run / cycle / steps) store one entry with sets = 0 and this filled in. */
+  cardio?: CardioEntry
+}
+
+export type CardioKind = 'run' | 'cycle' | 'walk'
+
+export interface CardioEntry {
+  kind: CardioKind
+  distance_km: number | null
+  steps: number | null
 }
 
 export interface Workout {

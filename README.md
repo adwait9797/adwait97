@@ -3,7 +3,7 @@
 A mobile-first web app for a group of friends (in different countries) to track workouts and daily calories, and see who has already hit the gym today.
 
 - **For You**: weekly rings (workouts vs. goal, calories today, days under target), a week strip, and big **Record Workout** / **Log Meal** buttons. Tap any meal or workout to see its details; **History** shows every past day.
-- **Record Workout**: **Start workout** logs each set's weight and reps live, with a timer, prefilled from last time (it survives closing the app), or **Quick log** just records the split.
+- **Record Workout**: **Start workout** logs each set's weight and reps live, with a timer, prefilled from last time (it survives closing the app); **Copy last session** loads the exact exercises, weights and reps from the previous session of that split. **Cardio** logs a run, ride or steps (distance, time, pace). **Quick log** just records the split.
 - **Gym Progress**: per split, each exercise's top set over the last 8 weeks, its change vs. a week earlier, and weekly volume.
 - **Groups & friends**: new users ask to join a group at sign-up (or skip); an admin approves. Admins get a **🛡 Admin** page on the Friends tab with join requests, members per group (add/remove), people without a group, and rename/delete/new group. You can also add individual people by display name or exact email; once they accept, you see each other's progress like group-mates. The Friends tab shows one box per group, then your friends from other groups.
 - **Friends**: stories-style row (green ring = trained today, with the day type, e.g. *Push*), weekly leaderboard, and a status card per person with today's calorie total.

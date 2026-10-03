@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { fetchMeals, fetchWorkouts } from '../lib/api'
 import { prettyDate, today } from '../lib/dates'
 import type { Meal, Workout } from '../lib/types'
-import { isoDaysAgo, isQuickLog } from '../lib/workoutStats'
+import { cardioOf, isoDaysAgo, isQuickLog, workoutSummary } from '../lib/workoutStats'
 import { IconDumbbell } from './icons'
 
 const PAGE_DAYS = 30
@@ -108,7 +108,11 @@ export function HistorySheet({
                       >
                         <IconDumbbell size={15} strokeWidth={2.5} /> {w.day_name}
                         <span className="font-normal text-white/60">
-                          {isQuickLog(w) ? 'quick log' : `${w.exercises.length} ex${w.duration_min ? ` · ${w.duration_min}m` : ''}`}
+                          {cardioOf(w)
+                            ? workoutSummary(w)
+                            : isQuickLog(w)
+                              ? 'quick log'
+                              : `${w.exercises.length} ex${w.duration_min ? ` · ${w.duration_min}m` : ''}`}
                         </span>
                       </button>
                     ))}

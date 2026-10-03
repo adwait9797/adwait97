@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { addWorkout } from '../lib/api'
 import { timeAgo, toISODate } from '../lib/dates'
 import type { PlanDay, Workout, WorkoutExercise } from '../lib/types'
-import { formatSet, lastPerformance } from '../lib/workoutStats'
+import { formatSet, lastPerformance, lastSession, setsOf } from '../lib/workoutStats'
 import { ExercisePicker } from './ExercisePicker'
 import { IconCheck, IconClose, IconPlus } from './icons'
 import { DayChips, dayOptions } from './QuickLogSheet'
@@ -24,6 +24,8 @@ export interface LiveDraft {
   dayName: string
   exercises: DraftExercise[]
   notes: string
+  /** Workout id whose exercises were copied in with "Copy last session". */
+  importedFrom?: string
 }
 
 // The in-progress workout lives in localStorage so closing the app mid-session loses nothing.
@@ -69,6 +71,16 @@ function newExercise(name: string, history: Workout[], planSets = 3, planReps = 
   }
 }
 
+/** Exactly what was done last session: same exercises, order, weights and reps. */
+function exercisesFromSession(w: Workout): DraftExercise[] {
+  return w.exercises
+    .map((e) => ({
+      name: e.name,
+      sets: setsOf(e).map((st) => ({ weight: st.weight_kg ? String(st.weight_kg) : '', reps: String(st.reps), done: false })),
+    }))
+    .filter((e) => e.sets.length > 0)
+}
+
 export function startDraft(dayName: string, plan: PlanDay[], history: Workout[]): LiveDraft {
   const d: LiveDraft = { startedAt: Date.now(), dayName, exercises: exercisesFor(dayName, plan, history), notes: '' }
   storeDraft(d)
@@ -102,6 +114,7 @@ export function LiveWorkout({
   const [now, setNow] = useState(() => Date.now())
   const [picker, setPicker] = useState(false)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const [confirmImport, setConfirmImport] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -136,6 +149,12 @@ export function LiveWorkout({
   }
 
   const doneSets = draft.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0)
+  const prevSession = lastSession(history, draft.dayName)
+
+  function importPrev() {
+    if (!prevSession) return
+    update({ ...draft!, exercises: exercisesFromSession(prevSession), importedFrom: prevSession.id })
+  }
 
   async function finish() {
     if (doneSets === 0) {
@@ -195,6 +214,28 @@ export function LiveWorkout({
           {error && <p className="rounded-xl bg-move/15 px-3 py-2 text-center text-sm text-move">{error}</p>}
 
           <DayChips options={dayOptions(plan)} value={draft.dayName} onChange={chooseDay} />
+
+          {prevSession &&
+            (draft.importedFrom === prevSession.id ? (
+              <p className="px-1 text-[13px] text-muted">
+                ✓ Copied your {draft.dayName} session from {timeAgo(prevSession.local_date + 'T12:00:00')}. Beat it!
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={() => (doneSets > 0 ? setConfirmImport(true) : importPrev())}
+                className="flex w-full items-center gap-3 rounded-2xl bg-primary/12 px-4 py-3 text-left active:bg-primary/20"
+              >
+                <span className="text-[22px] text-primary">↺</span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[16px] font-semibold text-primary">Copy last {draft.dayName} session</div>
+                  <div className="truncate text-[13px] text-muted">
+                    {timeAgo(prevSession.local_date + 'T12:00:00')} · {prevSession.exercises.length} exercise
+                    {prevSession.exercises.length === 1 ? '' : 's'} with the same weights & reps
+                  </div>
+                </div>
+              </button>
+            ))}
 
           {draft.exercises.map((ex, ei) => {
             const last = lastPerformance(history, ex.name)
@@ -316,6 +357,27 @@ export function LiveWorkout({
           opened={picker}
           onClose={() => setPicker(false)}
           onPick={(name) => update({ ...draft, exercises: [...draft.exercises, newExercise(name, history)] })}
+        />
+
+        <Dialog
+          opened={confirmImport}
+          onBackdropClick={() => setConfirmImport(false)}
+          title="Replace this session?"
+          content={`Your ticked sets will be replaced with your last ${draft.dayName} session.`}
+          buttons={
+            <>
+              <DialogButton onClick={() => setConfirmImport(false)}>Keep</DialogButton>
+              <DialogButton
+                strong
+                onClick={() => {
+                  setConfirmImport(false)
+                  importPrev()
+                }}
+              >
+                Replace
+              </DialogButton>
+            </>
+          }
         />
 
         <Dialog

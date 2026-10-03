@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react'
 import { deleteMeal, deleteWorkout } from '../lib/api'
 import { prettyDate } from '../lib/dates'
 import type { Meal, Workout } from '../lib/types'
-import { formatSet, isQuickLog, setsOf, volume } from '../lib/workoutStats'
+import { CARDIO, cardioOf, fmtKm, formatSet, isQuickLog, paceLabel, setsOf, volume } from '../lib/workoutStats'
 import { IconDumbbell, IconTrash } from './icons'
 
 function BottomSheet({ opened, onClose, children }: { opened: boolean; onClose: () => void; children: ReactNode }) {
@@ -140,15 +140,34 @@ export function WorkoutDetailSheet({
   const w = workout ?? shown
   const total = w ? w.exercises.reduce((s, e) => s + volume(setsOf(e)), 0) : 0
   const setCount = w ? w.exercises.reduce((s, e) => s + setsOf(e).length, 0) : 0
+  const cardio = w ? cardioOf(w) : null
   return (
     <BottomSheet opened={!!workout} onClose={onClose}>
       {w && (
         <>
           <p className="text-[13px] font-medium text-muted">{prettyDate(w.local_date)}</p>
           <h2 className="flex items-center gap-2 text-[24px] font-bold">
-            <IconDumbbell size={24} className="text-move" /> {w.day_name}
+            {cardio ? <span>{CARDIO[cardio.kind].emoji}</span> : <IconDumbbell size={24} className="text-move" />} {w.day_name}
           </h2>
-          {isQuickLog(w) ? (
+          {cardio ? (
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {cardio.kind === 'walk' ? (
+                <Stat label="Steps" value={cardio.steps ? cardio.steps.toLocaleString() : '–'} color="text-exercise" />
+              ) : (
+                <Stat label="Distance" value={cardio.distance_km ? `${fmtKm(cardio.distance_km)}km` : '–'} color="text-exercise" />
+              )}
+              <Stat label="Time" value={w.duration_min != null ? `${w.duration_min}m` : '–'} color="text-stand" />
+              {cardio.kind === 'walk' ? (
+                <Stat label="Distance" value={cardio.distance_km ? `${fmtKm(cardio.distance_km)}km` : '–'} color="text-move" />
+              ) : (
+                <Stat
+                  label={cardio.kind === 'cycle' ? 'Speed km/h' : 'Pace /km'}
+                  value={paceLabel(cardio, w.duration_min)?.replace(' km/h', '').replace(' /km', '') ?? '–'}
+                  color="text-move"
+                />
+              )}
+            </div>
+          ) : isQuickLog(w) ? (
             <p className="mt-3 text-[15px] text-muted">Quick log: no exercise details recorded.</p>
           ) : (
             <>

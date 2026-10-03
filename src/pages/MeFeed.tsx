@@ -4,7 +4,7 @@ import type { LiveDraft } from '../components/LiveWorkout'
 import { Rings } from '../components/Rings'
 import { parseISODate, prettyDate, today, WEEKDAY_LETTERS, weekDates } from '../lib/dates'
 import type { Meal, Profile, Workout } from '../lib/types'
-import { isQuickLog } from '../lib/workoutStats'
+import { CARDIO, cardioOf, workoutSummary } from '../lib/workoutStats'
 
 export function MeFeed({
   profile,
@@ -208,16 +208,16 @@ export function MeFeed({
                   onClick={() => onOpenWorkout(w)}
                 >
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-move/15 text-move">
-                    <IconDumbbell size={20} />
+                    {cardioOf(w) ? <span className="text-[20px]">{CARDIO[cardioOf(w)!.kind].emoji}</span> : <IconDumbbell size={20} />}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[16px] font-semibold">{w.day_name}</div>
                     <div className="truncate text-[13px] text-muted">
                       {w.local_date === t ? 'Today' : prettyDate(w.local_date)} ·{' '}
-                      {isQuickLog(w) ? 'quick log' : `${w.exercises.length} exercises`}
+                      {workoutSummary(w)}
                     </div>
                   </div>
-                  {w.duration_min != null && <span className="num shrink-0 text-[15px] text-stand">{w.duration_min} min</span>}
+                  {w.duration_min != null && !cardioOf(w) && <span className="num shrink-0 text-[15px] text-stand">{w.duration_min} min</span>}
                 </button>
               </li>
             ))}
