@@ -1,10 +1,84 @@
--- Friend stats for the Friends tab: strength trend + inputs for fun tags.
--- Run once in Supabase: SQL Editor -> New query -> paste -> Run. Safe to re-run.
--- (Also included in schema.sql.)
---
--- Like get_feed(), this is security definer and returns only per-person aggregates:
--- a strength-change percentage, counts, and the name of their most-trained exercise/split.
--- Individual sets, weights and meals stay private.
+-- Friends update: banter status + strength trend / fun tags.
+-- Run once in Supabase: SQL Editor -> New query -> paste all of this -> Run. Safe to re-run.
+-- (Everything here is also part of schema.sql.)
+
+-- Banter status shown as a speech bubble on the Friends tab; hidden after 24 hours (see get_feed).
+alter table public.profiles add column if not exists status_text text;
+alter table public.profiles add column if not exists status_at timestamptz;
+alter table public.profiles drop constraint if exists profiles_status_len;
+alter table public.profiles add constraint profiles_status_len check (char_length(status_text) <= 40);
+
+
+drop function if exists public.get_feed();
+create function public.get_feed()
+returns table (
+  user_id              uuid,
+  display_name         text,
+  avatar_url           text,
+  weekly_target        int,
+  local_date           date,
+  worked_out_today     boolean,
+  today_workout        text,
+  last_workout_at      timestamptz,
+  week_workouts        int,
+  week_workout_dates   date[],
+  today_calories       int,
+  meals_today          int,
+  under_target_today   boolean,
+  week_under_target    int,
+  status_text          text,       -- banter status, only if set in the last 24 hours
+  status_at            timestamptz
+)
+language sql stable security definer set search_path = public as $$
+  with p as (
+    select pr.*,
+           (now() at time zone pr.timezone)::date as today
+    from profiles pr
+    where pr.onboarded
+  ),
+  wk as (
+    select p.id,
+           p.today,
+           date_trunc('week', p.today::timestamp)::date as week_start
+    from p
+  ),
+  daily_cals as (
+    select m.user_id, m.local_date, sum(m.calories)::int as kcal
+    from meals m
+    join wk on wk.id = m.user_id and m.local_date between wk.week_start and wk.today
+    group by m.user_id, m.local_date
+  )
+  select
+    p.id,
+    p.display_name,
+    p.avatar_url,
+    p.weekly_target,
+    p.today,
+    exists (select 1 from workouts w where w.user_id = p.id and w.local_date = p.today),
+    (select w.day_name from workouts w
+       where w.user_id = p.id and w.local_date = p.today
+       order by w.created_at desc limit 1),
+    (select max(w.created_at) from workouts w where w.user_id = p.id),
+    (select count(distinct w.local_date)::int from workouts w
+       where w.user_id = p.id and w.local_date between wk.week_start and wk.today),
+    coalesce((select array_agg(distinct w.local_date order by w.local_date) from workouts w
+       where w.user_id = p.id and w.local_date between wk.week_start and wk.today), '{}'),
+    coalesce((select dc.kcal from daily_cals dc
+       where dc.user_id = p.id and dc.local_date = p.today), 0),
+    (select count(*)::int from meals m where m.user_id = p.id and m.local_date = p.today),
+    coalesce((select dc.kcal <= p.calorie_target from daily_cals dc
+       where dc.user_id = p.id and dc.local_date = p.today), true),
+    (select count(*)::int from daily_cals dc
+       where dc.user_id = p.id and dc.kcal <= p.calorie_target),
+    case when p.status_at > now() - interval '24 hours' then nullif(btrim(p.status_text), '') end,
+    case when p.status_at > now() - interval '24 hours' and nullif(btrim(p.status_text), '') is not null then p.status_at end
+  from p
+  join wk on wk.id = p.id
+  where auth.uid() is not null;
+$$;
+
+revoke all on function public.get_feed() from public, anon;
+grant execute on function public.get_feed() to authenticated;
 
 drop function if exists public.get_friend_stats();
 create function public.get_friend_stats()

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { IconDumbbell, IconFlame, IconTrophy } from '../components/icons'
 import { Seg } from '../components/Seg'
+import { StatusSheet } from '../components/StatusSheet'
 import { tagsFor, type Tag } from '../lib/badges'
 import { timeAgo, WEEKDAY_LETTERS, weekDates } from '../lib/dates'
 import type { FeedEntry, FriendStats } from '../lib/types'
@@ -27,6 +28,18 @@ function TrendPill({ pct, large }: { pct: number | null | undefined; large?: boo
   )
 }
 
+/** Little speech bubble shown above a profile picture. */
+function StatusBubble({ text }: { text: string }) {
+  return (
+    <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 -translate-x-1/2">
+      <div className="w-max max-w-[80px] rounded-2xl bg-white px-2 py-1 text-center text-[11px] leading-tight font-semibold break-words text-black shadow-lg">
+        {text}
+      </div>
+      <div className="mx-auto -mt-1 h-2 w-2 rotate-45 bg-white" />
+    </div>
+  )
+}
+
 function TagChip({ tag, onTap }: { tag: Tag; onTap: (t: Tag) => void }) {
   return (
     <button
@@ -46,14 +59,17 @@ export function FriendsFeed({
   meId,
   loading,
   error,
+  onStatusChanged,
 }: {
   feed: FeedEntry[] | null
   stats: FriendStats[]
   meId: string
   loading: boolean
   error: string | null
+  onStatusChanged: () => void
 }) {
   const [board, setBoard] = useState<'workouts' | 'strength'>('workouts')
+  const [statusOpen, setStatusOpen] = useState(false)
   const [openTag, setOpenTag] = useState<{ tag: Tag; who: string } | null>(null)
 
   if (!feed) {
@@ -69,6 +85,8 @@ export function FriendsFeed({
   const tagsById = new Map(feed.map((e) => [e.user_id, tagsFor(e, statsById.get(e.user_id), stats)]))
   const nameOf = (e: FeedEntry) => (e.user_id === meId ? 'You' : e.display_name)
 
+  const me = feed.find((e) => e.user_id === meId)
+  const anyStatus = feed.some((e) => e.status_text)
   const trainedToday = feed.filter((e) => e.worked_out_today)
   const ranked = [...feed].sort(
     (a, b) =>
@@ -102,15 +120,27 @@ export function FriendsFeed({
           </p>
           <h1 className="text-[34px] leading-tight font-bold tracking-tight">Friends</h1>
         </div>
-        {loading && <Preloader className="mb-2 h-5! w-5!" />}
+        <div className="mb-2 flex items-center gap-3">
+          {loading && <Preloader className="h-5! w-5!" />}
+          <button
+            type="button"
+            onClick={() => setStatusOpen(true)}
+            className="rounded-full bg-white/10 px-3 py-1.5 text-[13px] font-semibold active:bg-white/20"
+          >
+            💬 {me?.status_text ? 'Edit status' : 'Add status'}
+          </button>
+        </div>
       </div>
 
       {/* Stories-style row: green ring = already trained today */}
-      <div className="no-scrollbar flex gap-4 overflow-x-auto px-4">
+      <div className={`no-scrollbar flex gap-4 overflow-x-auto px-4 ${anyStatus ? 'pt-14' : ''}`}>
         {[...trainedToday, ...feed.filter((e) => !e.worked_out_today)].map((e) => (
           <div key={e.user_id} className="flex w-[68px] shrink-0 flex-col items-center gap-1.5">
-            <div className={e.worked_out_today ? '' : 'opacity-45'}>
-              <Avatar url={e.avatar_url} name={e.display_name} size={64} ring={e.worked_out_today} />
+            <div className="relative">
+              {e.status_text && <StatusBubble text={e.status_text} />}
+              <div className={e.worked_out_today ? '' : 'opacity-45'}>
+                <Avatar url={e.avatar_url} name={e.display_name} size={64} ring={e.worked_out_today} />
+              </div>
             </div>
             <span className="w-full truncate text-center text-[12px]">{nameOf(e)}</span>
             <span className={`-mt-1 text-[11px] font-semibold ${e.worked_out_today ? 'text-exercise' : 'text-muted'}`}>
@@ -214,6 +244,14 @@ export function FriendsFeed({
         </p>
       </section>
 
+      <StatusSheet
+        opened={statusOpen}
+        current={me?.status_text ?? null}
+        currentAt={me?.status_at ?? null}
+        onClose={() => setStatusOpen(false)}
+        onSaved={onStatusChanged}
+      />
+
       <Dialog
         opened={!!openTag}
         onBackdropClick={() => setOpenTag(null)}
@@ -249,6 +287,7 @@ function FriendCard({
             <span className="truncate text-[17px] font-semibold">{isMe ? 'You' : e.display_name}</span>
             <TrendPill pct={pct} />
           </div>
+          {e.status_text && <div className="truncate text-[14px] font-medium text-white/90">💬 “{e.status_text}”</div>}
           {e.worked_out_today ? (
             <div className="flex items-center gap-1 text-[14px] font-semibold text-exercise">
               <IconDumbbell size={15} strokeWidth={2.5} /> {e.today_workout} day

@@ -168,7 +168,7 @@ export function Home({ profile }: { profile: Profile }) {
           />
         </section>
         <section className="h-full w-full shrink-0 snap-start overflow-y-auto">
-          <FriendsFeed feed={feed} stats={friendStats} meId={profile.id} loading={feedLoading} error={feedError} />
+          <FriendsFeed feed={feed} stats={friendStats} meId={profile.id} onStatusChanged={loadFeed} loading={feedLoading} error={feedError} />
         </section>
       </div>
 

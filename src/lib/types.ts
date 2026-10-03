@@ -12,6 +12,9 @@ export interface Profile {
   calorie_target: number
   timezone: string
   onboarded: boolean
+  /** Banter status (max 20 characters), visible to friends for 24 hours after status_at. */
+  status_text?: string | null
+  status_at?: string | null
 }
 
 export interface PlanExercise {
@@ -100,6 +103,9 @@ export interface FeedEntry {
   meals_today: number
   under_target_today: boolean
   week_under_target: number
+  /** Only present while the status is less than 24 hours old. */
+  status_text?: string | null
+  status_at?: string | null
 }
 
 /** One row of get_friend_stats(): aggregates behind the strength trend and fun tags. */

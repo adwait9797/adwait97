@@ -38,6 +38,12 @@ create table if not exists public.plan_days (
   exercises  jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now()
 );
+-- Banter status shown as a speech bubble on the Friends tab; hidden after 24 hours (see get_feed).
+alter table public.profiles add column if not exists status_text text;
+alter table public.profiles add column if not exists status_at timestamptz;
+alter table public.profiles drop constraint if exists profiles_status_len;
+alter table public.profiles add constraint profiles_status_len check (char_length(status_text) <= 40);
+
 create index if not exists plan_days_user_idx on public.plan_days (user_id, position);
 
 create table if not exists public.workouts (
@@ -160,7 +166,9 @@ returns table (
   today_calories       int,
   meals_today          int,
   under_target_today   boolean,
-  week_under_target    int
+  week_under_target    int,
+  status_text          text,       -- banter status, only if set in the last 24 hours
+  status_at            timestamptz
 )
 language sql stable security definer set search_path = public as $$
   with p as (
@@ -202,7 +210,9 @@ language sql stable security definer set search_path = public as $$
     coalesce((select dc.kcal <= p.calorie_target from daily_cals dc
        where dc.user_id = p.id and dc.local_date = p.today), true),
     (select count(*)::int from daily_cals dc
-       where dc.user_id = p.id and dc.kcal <= p.calorie_target)
+       where dc.user_id = p.id and dc.kcal <= p.calorie_target),
+    case when p.status_at > now() - interval '24 hours' then nullif(btrim(p.status_text), '') end,
+    case when p.status_at > now() - interval '24 hours' and nullif(btrim(p.status_text), '') is not null then p.status_at end
   from p
   join wk on wk.id = p.id
   where auth.uid() is not null;
@@ -213,7 +223,7 @@ grant execute on function public.get_feed() to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Friend stats: strength trend + inputs for fun tags (aggregates only).
--- Also available standalone in friend_stats.sql.
+-- Also in update_friends.sql for existing projects.
 -- ---------------------------------------------------------------------------
 
 drop function if exists public.get_friend_stats();
