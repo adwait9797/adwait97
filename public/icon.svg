@@ -1,11 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#000"/>
-  <g fill="none" stroke-linecap="round" stroke-width="44" transform="rotate(-90 256 256)">
-    <circle cx="256" cy="256" r="178" stroke="#fa114f" stroke-opacity=".25"/>
-    <circle cx="256" cy="256" r="178" stroke="#fa114f" stroke-dasharray="1118" stroke-dashoffset="250"/>
-    <circle cx="256" cy="256" r="128" stroke="#a6ff00" stroke-opacity=".25"/>
-    <circle cx="256" cy="256" r="128" stroke="#a6ff00" stroke-dasharray="804" stroke-dashoffset="280"/>
-    <circle cx="256" cy="256" r="78" stroke="#00d8ff" stroke-opacity=".25"/>
-    <circle cx="256" cy="256" r="78" stroke="#00d8ff" stroke-dasharray="490" stroke-dashoffset="60"/>
+  <rect width="512" height="512" fill="#000"/>
+  <!-- Flat dumbbell -->
+  <g fill="#a6ff00">
+    <rect x="96" y="148" width="36" height="88" rx="10"/>
+    <rect x="136" y="122" width="40" height="140" rx="12"/>
+    <rect x="172" y="179" width="168" height="26" rx="6"/>
+    <rect x="336" y="122" width="40" height="140" rx="12"/>
+    <rect x="380" y="148" width="36" height="88" rx="10"/>
   </g>
+  <text x="256" y="356" text-anchor="middle" fill="#fff"
+        font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter Variable', Inter, sans-serif"
+        font-size="74" font-weight="800" letter-spacing="-2">GymBuddies</text>
+  <text x="256" y="414" text-anchor="middle" fill="#8e8e93"
+        font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter Variable', Inter, sans-serif"
+        font-size="38" font-weight="600" letter-spacing="0.5">by 97</text>
 </svg>

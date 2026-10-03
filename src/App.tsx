@@ -3,10 +3,11 @@ import { AuthProvider, useAuth } from './lib/auth'
 import { isConfigured } from './lib/supabase'
 import { AuthPage } from './pages/AuthPage'
 import { Home } from './pages/Home'
+import { NewPasswordPage } from './pages/NewPasswordPage'
 import { Onboarding } from './pages/Onboarding'
 
 function Screens() {
-  const { session, profile, loading } = useAuth()
+  const { session, profile, loading, recovery } = useAuth()
 
   if (loading || (session && !profile)) {
     return (
@@ -16,6 +17,7 @@ function Screens() {
     )
   }
   if (!session) return <AuthPage />
+  if (recovery) return <NewPasswordPage />
   if (!profile!.onboarded) return <Onboarding />
   return <Home profile={profile!} />
 }

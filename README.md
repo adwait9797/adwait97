@@ -24,6 +24,7 @@ A mobile-first web app for a group of friends (in different countries) to track 
 3. **Authentication → Sign In / Providers → Email**: keep it enabled. Turning off **Confirm email** is optional and makes sign-up instant for friends.
 4. **Authentication → URL Configuration**: set **Site URL** to your Vercel URL (after step 3) so confirmation emails link back to the app.
 5. **Project Settings → API**: copy the **Project URL** and the **anon public** key.
+6. **Password resets**: the app doesn't send reset emails. "Forgot password?" tells people to contact Adwait, who resets it with [`supabase/reset-password.sql`](supabase/reset-password.sql) in the SQL Editor; they then change it under **Profile → Change password**.
 
 ### 2. Anthropic API key
 
@@ -42,6 +43,8 @@ A mobile-first web app for a group of friends (in different countries) to track 
    | `ANTHROPIC_API_KEY` | Your Anthropic key (server-only, never sent to the browser) |
 
 3. **Deploy**. Share the `https://<name>.vercel.app` link with your friends.
+
+**Custom domain:** the app lives at `https://gymbuddies.ak97.in` (CNAME in Squarespace DNS → Vercel). Opening the old `adwait97.vercel.app` address redirects there and carries the login over, so nobody has to log in again (`src/lib/domainRedirect.ts`). Preview deployments are unaffected.
 
 On iPhone: open the link in Safari → Share → **Add to Home Screen**. It then opens full-screen like a native app.
 
