@@ -1,17 +1,17 @@
 import { Block, Button, Preloader } from 'konsta/react'
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Avatar } from '../components/Avatar'
 import { IconCamera, IconCheck } from '../components/icons'
 import { NumStepper } from '../components/NumStepper'
 import { PlanEditor } from '../components/PlanEditor'
 import { Seg } from '../components/Seg'
-import { savePlan, saveProfile, uploadAvatar } from '../lib/api'
+import { joinGroup, listGroups, savePlan, saveProfile, uploadAvatar } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { deviceTimezone } from '../lib/dates'
 import { planFromTemplate, recommendedSplit, SPLITS, suggestCalories } from '../lib/exercises'
-import type { Goal, PlanDay } from '../lib/types'
+import type { Goal, Group, PlanDay } from '../lib/types'
 
-const STEPS = 5
+const STEPS = 6
 
 function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
@@ -42,6 +42,16 @@ export function Onboarding() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [groups, setGroups] = useState<Group[] | null>(null)
+  const [groupId, setGroupId] = useState<string | null>(null)
+
+  useEffect(() => {
+    listGroups().then((g) => {
+      setGroups(g)
+      const mine = g.find((x) => x.is_member)
+      if (mine) setGroupId(mine.id)
+    })
+  }, [])
 
   const weightNum = Number(weight) || null
   const suggested = suggestCalories(weightNum, goal)
@@ -50,6 +60,7 @@ export function Onboarding() {
 
   const canNext = [
     name.trim().length > 0,
+    groups !== null && (groups.length === 0 || !!groupId),
     Number(weight) >= 30 && Number(weight) <= 300 && Number(height) >= 100 && Number(height) <= 250,
     true,
     true,
@@ -58,7 +69,7 @@ export function Onboarding() {
 
   function next() {
     setError(null)
-    if (step === 3) {
+    if (step === 4) {
       setPlanMode(chosenSplit === 'custom' ? 'own' : 'recommended')
       setPlan(planFromTemplate(chosenSplit))
     }
@@ -72,6 +83,8 @@ export function Onboarding() {
     try {
       const avatar_url = photo ? await uploadAvatar(photo) : (profile?.avatar_url ?? null)
       await savePlan(plan)
+      const chosenGroup = groups?.find((g) => g.id === groupId)
+      if (chosenGroup && !chosenGroup.is_member) await joinGroup(chosenGroup.id)
       const p = await saveProfile({
         display_name: name.trim(),
         avatar_url,
@@ -154,6 +167,41 @@ export function Onboarding() {
 
         {step === 1 && (
           <>
+            <Header title="Pick your group" subtitle="You'll see everyone in your group on the Friends tab, and they'll see you." />
+            <div className="space-y-3 px-4">
+              {groups === null && <p className="text-center text-muted">Loading groups…</p>}
+              {groups?.length === 0 && (
+                <p className="rounded-2xl bg-card px-4 py-5 text-center text-[15px] text-muted">
+                  No groups yet. You can add friends later from the Friends tab.
+                </p>
+              )}
+              {groups?.map((g) => {
+                const active = groupId === g.id
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => setGroupId(g.id)}
+                    className={`flex w-full items-center gap-3 rounded-2xl bg-card p-4 text-left transition ${active ? 'ring-2 ring-primary' : ''}`}
+                  >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[20px]">👥</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[17px] font-semibold">{g.name}</div>
+                      <div className="text-[13px] text-muted">
+                        {g.member_count === 0 ? 'Be the first one in' : `${g.member_count} member${g.member_count === 1 ? '' : 's'}`}
+                      </div>
+                    </div>
+                    {active && <IconCheck size={22} className="text-primary" />}
+                  </button>
+                )
+              })}
+              <p className="px-1 text-[13px] text-muted">You can also add individual friends from other groups later.</p>
+            </div>
+          </>
+        )}
+
+        {step === 2 && (
+          <>
             <Header title="Your body" subtitle="Private: only you can see this. Used to suggest a calorie target." />
             <div className="grid grid-cols-2 gap-3 px-4">
               <Field label="Weight (kg)">
@@ -180,7 +228,7 @@ export function Onboarding() {
           </>
         )}
 
-        {step === 2 && (
+        {step === 3 && (
           <>
             <Header title="Your goals" subtitle="You can change these any time." />
             <div className="space-y-3 px-4">
@@ -225,7 +273,7 @@ export function Onboarding() {
           </>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <>
             <Header title="Pick your split" subtitle={`For ${weekly} days a week we recommend the highlighted one.`} />
             <div className="space-y-3 px-4">
@@ -265,7 +313,7 @@ export function Onboarding() {
           </>
         )}
 
-        {step === 4 && (
+        {step === 5 && (
           <>
             <Header title="Your workout plan" subtitle="Start from our suggested plan or build your own." />
             <Block className="my-0! mb-4!">

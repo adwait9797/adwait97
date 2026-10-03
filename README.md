@@ -5,6 +5,7 @@ A mobile-first web app for a group of friends (in different countries) to track 
 - **For You**: weekly rings (workouts vs. goal, calories today, days under target), a week strip, and big **Record Workout** / **Log Meal** buttons. Tap any meal or workout to see its details; **History** shows every past day.
 - **Record Workout**: **Start workout** logs each set's weight and reps live, with a timer, prefilled from last time (it survives closing the app), or **Quick log** just records the split.
 - **Gym Progress**: per split, each exercise's top set over the last 8 weeks, its change vs. a week earlier, and weekly volume.
+- **Groups & friends**: new users pick a group at sign-up (only admins can create groups). You can also add individual people by display name or exact email; once they accept, you see each other's progress like group-mates. The Friends tab shows one box per group, then your friends from other groups.
 - **Friends**: stories-style row (green ring = trained today, with the day type, e.g. *Push*), weekly leaderboard, and a status card per person with today's calorie total.
 - **AI meal logging**: describe a meal or snap a photo. Claude Haiku 4.5 estimates calories and macros, and you can correct it in chat ("it was 2 rotis"). Manual entry is also available.
 - **Onboarding**: display name, photo, weight, height, workouts per week, goal and calorie target, split (PPL / Upper-Lower / Full Body / Bro / Arnold / Custom), then a suggested plan or your own built from a list of common exercises.
@@ -61,7 +62,7 @@ On iPhone: open the link in Safari → Share → **Add to Home Screen**. It then
 A photo is downscaled to 1024 px in the browser (~1.5k input tokens) and the reply is ~350 tokens, so one analysis costs about a third of a cent. **10 friends × 4 meals a day × 30 days ≈ 1,200 analyses ≈ €4/month.**
 
 Guard rails built in:
-- Each user is capped at **12 AI analyses per day** (`daily_limit` in `consume_ai_credit()` in `schema.sql`). After that the app still works and asks for manual entry.
+- Each user is capped at **6 AI-analysed meals per day** (corrections in the same chat are free, with a hard limit of 30 AI calls a day) (`meal_limit` and `call_limit` in `consume_ai_credit()` in `schema.sql`). After that the app still works and asks for manual entry.
 - Only signed-in users can call the AI endpoint. The key lives only on Vercel.
 - Meal photos are **not stored**: they go to the AI once and are discarded. Profile pictures are shrunk to 320 px.
 - Set the Anthropic Console spend limit as a hard ceiling.

@@ -15,6 +15,8 @@ export interface Profile {
   /** Banter status (max 20 characters), visible to friends for 24 hours after status_at. */
   status_text?: string | null
   status_at?: string | null
+  /** Admins can create groups (set from the Supabase dashboard only). */
+  is_admin?: boolean
 }
 
 export interface PlanExercise {
@@ -106,6 +108,10 @@ export interface FeedEntry {
   /** Only present while the status is less than 24 hours old. */
   status_text?: string | null
   status_at?: string | null
+  /** Groups shared with the viewer. */
+  group_ids?: string[]
+  /** Accepted friend of the viewer. */
+  is_friend?: boolean
 }
 
 /** One row of get_friend_stats(): aggregates behind the strength trend and fun tags. */
@@ -123,4 +129,30 @@ export interface FriendStats {
   late_sessions: number
   leg_weeks: number
   volume_7d: number
+}
+
+export interface Group {
+  id: string
+  name: string
+  member_count: number
+  is_member: boolean
+}
+
+export type Relation = 'none' | 'requested' | 'incoming' | 'friends'
+
+export interface UserSearchResult {
+  user_id: string
+  display_name: string
+  avatar_url: string | null
+  relation: Relation
+}
+
+export interface Friendship {
+  user_id: string
+  display_name: string
+  avatar_url: string | null
+  status: 'pending' | 'accepted'
+  /** true = they sent the request to you */
+  incoming: boolean
+  created_at: string
 }

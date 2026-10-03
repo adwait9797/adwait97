@@ -112,10 +112,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const turns = parseTurns(req.body)
   if (!turns) return res.status(400).json({ error: 'Invalid request' })
 
-  // 2. Daily cap per user keeps the monthly bill predictable.
-  const { data: allowed, error: creditError } = await supabase.rpc('consume_ai_credit')
+  // 2. Daily caps keep the monthly bill predictable: 6 new meals per day (follow-up
+  //    corrections in the same chat are free), plus a hard cap on total AI calls.
+  const newMeal = turns.filter((t) => t.role === 'user').length === 1
+  let { data: credit, error: creditError } = await supabase.rpc('consume_ai_credit', { new_meal: newMeal })
+  if (creditError?.code === 'PGRST202') {
+    // Database not updated yet: fall back to the older single counter (returns a boolean).
+    const legacy = await supabase.rpc('consume_ai_credit')
+    creditError = legacy.error
+    credit = legacy.data === true ? 'ok' : 'call_limit'
+  }
   if (creditError) return res.status(500).json({ error: 'Could not check usage limit' })
-  if (!allowed) {
+  if (credit === 'meal_limit') {
+    return res.status(429).json({ error: "You've logged 6 AI meals today. You can still add more manually." })
+  }
+  if (credit !== 'ok') {
     return res.status(429).json({ error: "You've hit today's AI limit. You can still add the meal manually." })
   }
 

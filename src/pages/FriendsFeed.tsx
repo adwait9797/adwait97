@@ -3,10 +3,12 @@ import { useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { IconDumbbell, IconFlame, IconTrophy } from '../components/icons'
 import { Seg } from '../components/Seg'
+import { FriendsSheet, JoinGroupSheet, NewGroupSheet } from '../components/FriendsSheets'
 import { StatusSheet } from '../components/StatusSheet'
+import { respondFriendRequest } from '../lib/api'
 import { tagsFor, type Tag } from '../lib/badges'
 import { timeAgo, WEEKDAY_LETTERS, weekDates } from '../lib/dates'
-import type { FeedEntry, FriendStats } from '../lib/types'
+import type { FeedEntry, FriendStats, Friendship, Group } from '../lib/types'
 
 function score(e: FeedEntry) {
   return Math.min(e.week_workouts / Math.max(1, e.weekly_target), 1)
@@ -53,42 +55,33 @@ function TagChip({ tag, onTap }: { tag: Tag; onTap: (t: Tag) => void }) {
   )
 }
 
-export function FriendsFeed({
-  feed,
+/** Stories row, leaderboard and today's cards for one set of people (a group, or your friends). */
+function Circle({
+  people,
   stats,
   meId,
-  loading,
-  error,
-  onStatusChanged,
+  pad,
+  onTag,
 }: {
-  feed: FeedEntry[] | null
+  people: FeedEntry[]
   stats: FriendStats[]
   meId: string
-  loading: boolean
-  error: string | null
-  onStatusChanged: () => void
+  /** Horizontal padding, so the same layout works inside a group box and outside. */
+  pad: string
+  onTag: (tag: Tag, who: string) => void
 }) {
   const [board, setBoard] = useState<'workouts' | 'strength'>('workouts')
-  const [statusOpen, setStatusOpen] = useState(false)
-  const [openTag, setOpenTag] = useState<{ tag: Tag; who: string } | null>(null)
-
-  if (!feed) {
-    return (
-      <div className="flex justify-center pt-24">
-        {error ? <p className="px-8 text-center text-move">{error}</p> : <Preloader />}
-      </div>
-    )
-  }
-
-  const statsById = new Map(stats.map((s) => [s.user_id, s]))
+  const ids = new Set(people.map((e) => e.user_id))
+  // Relative tags (Most Improved, Volume Monster) are judged within this circle.
+  const circleStats = stats.filter((s) => ids.has(s.user_id))
+  const statsById = new Map(circleStats.map((s) => [s.user_id, s]))
   const pctOf = (id: string) => statsById.get(id)?.strength_pct ?? null
-  const tagsById = new Map(feed.map((e) => [e.user_id, tagsFor(e, statsById.get(e.user_id), stats)]))
+  const tagsById = new Map(people.map((e) => [e.user_id, tagsFor(e, statsById.get(e.user_id), circleStats)]))
   const nameOf = (e: FeedEntry) => (e.user_id === meId ? 'You' : e.display_name)
 
-  const me = feed.find((e) => e.user_id === meId)
-  const anyStatus = feed.some((e) => e.status_text)
-  const trainedToday = feed.filter((e) => e.worked_out_today)
-  const ranked = [...feed].sort(
+  const anyStatus = people.some((e) => e.status_text)
+  const trainedToday = people.filter((e) => e.worked_out_today)
+  const ranked = [...people].sort(
     (a, b) =>
       score(b) - score(a) ||
       b.week_workouts - a.week_workouts ||
@@ -96,7 +89,7 @@ export function FriendsFeed({
       a.display_name.localeCompare(b.display_name),
   )
   // Strength board: people with a trend first (highest gain first), then everyone else.
-  const strengthRanked = [...feed].sort((a, b) => {
+  const strengthRanked = [...people].sort((a, b) => {
     const pa = pctOf(a.user_id)
     const pb = pctOf(b.user_id)
     if (pa === null && pb === null) return a.display_name.localeCompare(b.display_name)
@@ -105,36 +98,17 @@ export function FriendsFeed({
     return pb - pa
   })
   // Status cards: who trained most recently first.
-  const activity = [...feed].sort((a, b) => {
+  const activity = [...people].sort((a, b) => {
     if (a.worked_out_today !== b.worked_out_today) return a.worked_out_today ? -1 : 1
     return (b.last_workout_at ?? '').localeCompare(a.last_workout_at ?? '')
   })
   const list = board === 'workouts' ? ranked : strengthRanked
 
   return (
-    <div className="space-y-6 pt-2 pb-28">
-      <div className="fade-up flex items-end justify-between px-4">
-        <div>
-          <p className="text-[13px] font-semibold tracking-wide text-muted uppercase">
-            {trainedToday.length} of {feed.length} trained today
-          </p>
-          <h1 className="text-[34px] leading-tight font-bold tracking-tight">Friends</h1>
-        </div>
-        <div className="mb-2 flex items-center gap-3">
-          {loading && <Preloader className="h-5! w-5!" />}
-          <button
-            type="button"
-            onClick={() => setStatusOpen(true)}
-            className="rounded-full bg-white/10 px-3 py-1.5 text-[13px] font-semibold active:bg-white/20"
-          >
-            💬 {me?.status_text ? 'Edit status' : 'Add status'}
-          </button>
-        </div>
-      </div>
-
+    <div className="space-y-5">
       {/* Stories-style row: green ring = already trained today */}
-      <div className={`no-scrollbar flex gap-4 overflow-x-auto px-4 ${anyStatus ? 'pt-14' : ''}`}>
-        {[...trainedToday, ...feed.filter((e) => !e.worked_out_today)].map((e) => (
+      <div className={`no-scrollbar flex gap-4 overflow-x-auto ${pad} ${anyStatus ? 'pt-14' : ''}`}>
+        {[...trainedToday, ...people.filter((e) => !e.worked_out_today)].map((e) => (
           <div key={e.user_id} className="flex w-[68px] shrink-0 flex-col items-center gap-1.5">
             <div className="relative">
               {e.status_text && <StatusBubble text={e.status_text} />}
@@ -151,10 +125,10 @@ export function FriendsFeed({
       </div>
 
       {/* Leaderboards */}
-      <section className="px-4">
+      <section className={pad}>
         <div className="mb-3 flex items-center gap-2">
-          <IconTrophy size={20} className="text-[#ffd60a]" />
-          <h2 className="text-[22px] font-bold">Leaderboard</h2>
+          <IconTrophy size={18} className="text-[#ffd60a]" />
+          <h3 className="text-[19px] font-bold">Leaderboard</h3>
         </div>
         <div className="mb-3">
           <Seg
@@ -226,8 +200,8 @@ export function FriendsFeed({
       </section>
 
       {/* Today's status cards */}
-      <section className="space-y-3 px-4">
-        <h2 className="text-[22px] font-bold">Today</h2>
+      <section className={`space-y-3 ${pad}`}>
+        <h3 className="text-[19px] font-bold">Today</h3>
         {activity.map((e) => (
           <FriendCard
             key={e.user_id}
@@ -235,22 +209,208 @@ export function FriendsFeed({
             isMe={e.user_id === meId}
             pct={pctOf(e.user_id)}
             tags={tagsById.get(e.user_id) ?? []}
-            onTag={(tag) => setOpenTag({ tag, who: nameOf(e) })}
+            onTag={(tag) => onTag(tag, nameOf(e))}
           />
         ))}
-        <p className="pt-2 text-center text-xs text-muted">
-          Friends only see totals: workouts, day type, strength trend and daily calories. Individual meals and sets stay
-          private.
-        </p>
       </section>
 
+    </div>
+  )
+}
+
+export function FriendsFeed({
+  feed,
+  stats,
+  groups,
+  friendships,
+  meId,
+  isAdmin,
+  loading,
+  error,
+  onChanged,
+}: {
+  feed: FeedEntry[] | null
+  stats: FriendStats[]
+  /** All groups; is_member marks yours. */
+  groups: Group[]
+  friendships: Friendship[]
+  meId: string
+  isAdmin: boolean
+  loading: boolean
+  error: string | null
+  /** Reload the feed after a status, friend or group change. */
+  onChanged: () => void
+}) {
+  const [sheet, setSheet] = useState<'status' | 'friends' | 'newGroup' | 'joinGroup' | null>(null)
+  const [openTag, setOpenTag] = useState<{ tag: Tag; who: string } | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  if (!feed) {
+    return (
+      <div className="flex justify-center pt-24">
+        {error ? <p className="px-8 text-center text-move">{error}</p> : <Preloader />}
+      </div>
+    )
+  }
+
+  const me = feed.find((e) => e.user_id === meId)
+  const myGroups = groups.filter((g) => g.is_member)
+  // Friends who don't share any of your groups appear below the group boxes (with you, to compare).
+  const outsideFriends = feed.filter((e) => e.is_friend && (e.group_ids?.length ?? 0) === 0)
+  const others = feed.filter((e) => e.user_id !== meId)
+  const trainedToday = others.filter((e) => e.worked_out_today).length
+  const incoming = friendships.filter((f) => f.status === 'pending' && f.incoming)
+  const onTag = (tag: Tag, who: string) => setOpenTag({ tag, who })
+  // Before the groups database update is installed the feed has no group info: show everyone, as before.
+  const legacy = groups.length === 0 && feed.every((e) => e.group_ids === undefined)
+
+  async function respond(userId: string, accept: boolean) {
+    setBusyId(userId)
+    try {
+      await respondFriendRequest(userId, accept)
+      onChanged()
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <div className="space-y-6 pt-2 pb-28">
+      <div className="fade-up flex items-end justify-between gap-3 px-4">
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold tracking-wide text-muted uppercase">
+            {trainedToday} of {others.length} trained today
+          </p>
+          <h1 className="text-[34px] leading-tight font-bold tracking-tight">Friends</h1>
+        </div>
+        <div className="mb-2 flex shrink-0 items-center gap-2">
+          {loading && <Preloader className="h-5! w-5!" />}
+          <button
+            type="button"
+            onClick={() => setSheet('friends')}
+            aria-label="Add friends"
+            className="relative rounded-full bg-white/10 px-3 py-1.5 text-[13px] font-semibold active:bg-white/20"
+          >
+            👤+
+            {incoming.length > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-move px-1 text-[10px] font-bold">
+                {incoming.length}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setSheet('status')}
+            className="rounded-full bg-white/10 px-3 py-1.5 text-[13px] font-semibold active:bg-white/20"
+          >
+            💬 {me?.status_text ? 'Edit status' : 'Add status'}
+          </button>
+        </div>
+      </div>
+
+      {/* Friend requests waiting for you */}
+      {incoming.length > 0 && (
+        <section className="space-y-2 px-4">
+          {incoming.map((f) => (
+            <div key={f.user_id} className="fade-up flex items-center gap-3 rounded-2xl bg-card p-3">
+              <Avatar url={f.avatar_url} name={f.display_name} size={40} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[15px] font-semibold">{f.display_name}</div>
+                <div className="text-[13px] text-muted">wants to share progress with you</div>
+              </div>
+              <button
+                type="button"
+                disabled={busyId === f.user_id}
+                onClick={() => respond(f.user_id, false)}
+                className="rounded-full px-3 py-1.5 text-[14px] text-muted"
+              >
+                Decline
+              </button>
+              <button
+                type="button"
+                disabled={busyId === f.user_id}
+                onClick={() => respond(f.user_id, true)}
+                className="rounded-full bg-primary px-3 py-1.5 text-[14px] font-semibold text-black"
+              >
+                Accept
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {legacy && <Circle people={feed} stats={stats} meId={meId} pad="px-4" onTag={onTag} />}
+
+      {!legacy && myGroups.length === 0 && outsideFriends.length === 0 && (
+        <section className="mx-4 rounded-3xl bg-card px-5 py-8 text-center">
+          <div className="text-[40px]">👥</div>
+          <h2 className="mt-2 text-[20px] font-bold">No crew yet</h2>
+          <p className="mt-1 text-[15px] text-muted">Join a group or add a friend to see each other's progress.</p>
+          <div className="mt-4 flex justify-center gap-2">
+            {groups.length > 0 && (
+              <button type="button" onClick={() => setSheet('joinGroup')} className="rounded-full bg-primary px-4 py-2 font-semibold text-black">
+                Join a group
+              </button>
+            )}
+            <button type="button" onClick={() => setSheet('friends')} className="rounded-full bg-white/10 px-4 py-2 font-semibold">
+              Add a friend
+            </button>
+          </div>
+        </section>
+      )}
+
+      {isAdmin && (
+        <div className="flex justify-end px-4">
+          <button type="button" onClick={() => setSheet('newGroup')} className="text-[14px] font-semibold text-primary">
+            + New group
+          </button>
+        </div>
+      )}
+
+      {/* Groups first, each in its own box */}
+      {myGroups.map((g) => {
+        const members = feed.filter((e) => e.group_ids?.includes(g.id))
+        return (
+          <section key={g.id} className="mx-3 rounded-3xl border border-white/10 bg-white/[0.03] pt-4 pb-5">
+            <div className="mb-4 flex items-baseline justify-between px-4">
+              <h2 className="truncate text-[22px] font-bold">👥 {g.name}</h2>
+              <span className="shrink-0 text-[13px] text-muted">
+                {members.length} member{members.length === 1 ? '' : 's'}
+              </span>
+            </div>
+            <Circle people={members} stats={stats} meId={meId} pad="px-3" onTag={onTag} />
+          </section>
+        )
+      })}
+
+      {/* Friends from outside your groups, just below the group boxes */}
+      {outsideFriends.length > 0 && (
+        <section className="space-y-4">
+          <div className="flex items-baseline justify-between px-4">
+            <h2 className="text-[22px] font-bold">🤝 Friends</h2>
+            <button type="button" onClick={() => setSheet('friends')} className="text-[14px] font-semibold text-primary">
+              Manage
+            </button>
+          </div>
+          <Circle people={me ? [me, ...outsideFriends] : outsideFriends} stats={stats} meId={meId} pad="px-4" onTag={onTag} />
+        </section>
+      )}
+
+      <p className="px-6 pt-2 text-center text-xs text-muted">
+        Only your groups and friends see your totals: workouts, day type, strength trend and daily calories. Individual
+        meals and sets stay private.
+      </p>
+
       <StatusSheet
-        opened={statusOpen}
+        opened={sheet === 'status'}
         current={me?.status_text ?? null}
         currentAt={me?.status_at ?? null}
-        onClose={() => setStatusOpen(false)}
-        onSaved={onStatusChanged}
+        onClose={() => setSheet(null)}
+        onSaved={onChanged}
       />
+      <FriendsSheet opened={sheet === 'friends'} friendships={friendships} onClose={() => setSheet(null)} onChanged={onChanged} />
+      <NewGroupSheet opened={sheet === 'newGroup'} onClose={() => setSheet(null)} onCreated={onChanged} />
+      <JoinGroupSheet opened={sheet === 'joinGroup'} groups={groups} onClose={() => setSheet(null)} onJoined={onChanged} />
 
       <Dialog
         opened={!!openTag}
