@@ -1,4 +1,5 @@
 import type { FeedEntry, FriendStats } from './types'
+import { CARDIO_DAYS } from './workoutStats'
 
 export interface Tag {
   id: string
@@ -54,14 +55,14 @@ export function tagsFor(entry: FeedEntry, stats: FriendStats | undefined, all: F
     })
   }
 
-  if (stats.top_split && stats.top_split_sessions >= 3 && stats.top_split !== 'Cardio') {
+  if (stats.top_split && stats.top_split_sessions >= 3 && !CARDIO_DAYS.has(stats.top_split)) {
     tags.push({
       id: 'split',
       emoji: '⚡',
       label: `${shortSplit(stats.top_split)} Day Hacker`,
       how: `${stats.top_split} is their favourite day (${stats.top_split_sessions} sessions in 8 weeks).`,
     })
-  } else if (stats.top_split === 'Cardio' && stats.top_split_sessions >= 3) {
+  } else if (stats.top_split && CARDIO_DAYS.has(stats.top_split) && stats.top_split_sessions >= 3) {
     tags.push({ id: 'cardio', emoji: '🏃', label: 'Cardio Bunny', how: 'Cardio is their most-logged day (3+ sessions in 8 weeks).' })
   }
 

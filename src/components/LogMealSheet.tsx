@@ -3,8 +3,9 @@ import { useEffect, useRef, useState } from 'react'
 import { addMeal, analyzeMeal, type ChatTurn } from '../lib/api'
 import { today } from '../lib/dates'
 import { blobToBase64, resizeImage } from '../lib/image'
+import { useDictation } from '../lib/useDictation'
 import type { MealEstimate } from '../lib/types'
-import { IconCamera, IconClose, IconSend, IconSparkle } from './icons'
+import { IconCamera, IconClose, IconMic, IconSend, IconSparkle } from './icons'
 
 interface Bubble {
   role: 'user' | 'assistant'
@@ -16,7 +17,7 @@ interface Bubble {
 
 const GREETING: Bubble = {
   role: 'assistant',
-  text: 'What did you eat? Describe it ("2 eggs, toast with butter, latte") or snap a photo and I\'ll estimate the calories.',
+  text: 'What did you eat? Describe it ("2 eggs, toast with butter, latte"), say it with the 🎤, or snap a photo and I\'ll estimate the calories.',
 }
 
 export function LogMealSheet({ opened, onClose, onSaved }: { opened: boolean; onClose: () => void; onSaved: () => void }) {
@@ -30,16 +31,31 @@ export function LogMealSheet({ opened, onClose, onSaved }: { opened: boolean; on
   const [manual, setManual] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const dictation = useDictation(setText)
+  const { stop: stopDictation, clearError: clearDictationError } = dictation
 
   useEffect(() => {
-    if (!opened) return
+    if (!opened) {
+      stopDictation()
+      return
+    }
     setBubbles([GREETING])
     setTurns([])
     setEstimate(null)
     setText('')
     setPendingImage(null)
     setManual(false)
-  }, [opened])
+    clearDictationError()
+  }, [opened, stopDictation, clearDictationError])
+
+  // Grow the text box with its content (dictation can fill several lines); max-h caps it.
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [text])
 
   useEffect(() => {
     const el = scrollRef.current?.closest('.overflow-auto, .overflow-y-auto') ?? scrollRef.current?.parentElement
@@ -58,6 +74,7 @@ export function LogMealSheet({ opened, onClose, onSaved }: { opened: boolean; on
   async function send() {
     const msg = text.trim()
     if ((!msg && !pendingImage) || thinking) return
+    dictation.stop()
     const userTurn: ChatTurn = { role: 'user', text: msg, image: pendingImage?.b64 }
     const nextTurns = [...turns, userTurn].slice(-7)
     // The API requires the conversation to start with a user turn.
@@ -186,6 +203,19 @@ export function LogMealSheet({ opened, onClose, onSaved }: { opened: boolean; on
                   </button>
                 </div>
               )}
+              {dictation.error && (
+                <div className="mb-2 flex items-start gap-2 rounded-xl bg-move/20 px-3 py-2 text-[13px] leading-snug">
+                  <span className="flex-1">{dictation.error}</span>
+                  <button type="button" aria-label="Dismiss" onClick={dictation.clearError} className="text-muted">
+                    <IconClose size={14} />
+                  </button>
+                </div>
+              )}
+              {dictation.listening && (
+                <div className="mb-2 flex items-center gap-2 px-1 text-[13px] text-move">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-move" /> Listening… tap the mic when you're done
+                </div>
+              )}
               <div className="flex items-end gap-2">
                 <button
                   type="button"
@@ -195,7 +225,19 @@ export function LogMealSheet({ opened, onClose, onSaved }: { opened: boolean; on
                 >
                   <IconCamera size={22} />
                 </button>
+                <button
+                  type="button"
+                  aria-label={dictation.listening ? 'Stop dictation' : 'Speak your meal'}
+                  aria-pressed={dictation.listening}
+                  onClick={() => (dictation.listening ? dictation.stop() : dictation.start(text))}
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                    dictation.listening ? 'animate-pulse bg-move text-white' : 'bg-card text-primary active:bg-card-2'
+                  }`}
+                >
+                  <IconMic size={22} />
+                </button>
                 <textarea
+                  ref={inputRef}
                   rows={1}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
@@ -205,7 +247,9 @@ export function LogMealSheet({ opened, onClose, onSaved }: { opened: boolean; on
                       send()
                     }
                   }}
-                  placeholder={estimate ? 'Correct it, e.g. "it was 2 rotis"' : 'Describe your meal…'}
+                  placeholder={
+                    dictation.listening ? 'Speak now…' : estimate ? 'Correct it, e.g. "it was 2 rotis"' : 'Describe your meal…'
+                  }
                   className="max-h-28 min-h-10 flex-1 resize-none rounded-[20px] border border-white/15 bg-card px-4 py-2 text-[16px] leading-6 outline-none placeholder:text-muted"
                 />
                 <button

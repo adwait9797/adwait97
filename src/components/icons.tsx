@@ -94,3 +94,10 @@ export const IconPencil = (p: P) => (
     <path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />
   </svg>
 )
+
+export const IconMic = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="9" y="3" width="6" height="11" rx="3" />
+    <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
+  </svg>
+)

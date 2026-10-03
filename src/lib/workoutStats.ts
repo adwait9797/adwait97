@@ -1,5 +1,5 @@
 import { parseISODate, toISODate } from './dates'
-import type { SetEntry, Workout, WorkoutExercise } from './types'
+import type { CardioEntry, CardioKind, SetEntry, Workout, WorkoutExercise } from './types'
 
 /** Every set of an exercise. Older/summary-only entries are expanded from sets × reps @ weight. */
 export function setsOf(e: WorkoutExercise): SetEntry[] {
@@ -11,6 +11,51 @@ export function setsOf(e: WorkoutExercise): SetEntry[] {
 /** A quick log records only that you trained, with no exercise detail. */
 export function isQuickLog(w: Workout): boolean {
   return w.exercises.length === 0
+}
+
+export const CARDIO: Record<CardioKind, { day: string; emoji: string; label: string }> = {
+  run: { day: 'Run', emoji: '🏃', label: 'Run' },
+  cycle: { day: 'Cycle', emoji: '🚴', label: 'Cycle' },
+  walk: { day: 'Steps', emoji: '👟', label: 'Steps' },
+}
+
+/** Day names that are cardio rather than lifting. */
+export const CARDIO_DAYS = new Set(['Cardio', ...Object.values(CARDIO).map((c) => c.day)])
+
+export function cardioOf(w: Workout): CardioEntry | null {
+  return w.exercises.find((e) => e.cardio)?.cardio ?? null
+}
+
+export function fmtKm(km: number): string {
+  return km >= 10 ? km.toFixed(1).replace(/\.0$/, '') : km.toFixed(2).replace(/0$/, '').replace(/\.0$/, '')
+}
+
+/** "5:42 /km" for runs and walks, "24.5 km/h" for rides. */
+export function paceLabel(c: CardioEntry, minutes: number | null): string | null {
+  if (!c.distance_km || !minutes) return null
+  if (c.kind === 'cycle') return `${(c.distance_km / (minutes / 60)).toFixed(1)} km/h`
+  const secPerKm = Math.round((minutes * 60) / c.distance_km)
+  return `${Math.floor(secPerKm / 60)}:${String(secPerKm % 60).padStart(2, '0')} /km`
+}
+
+/** Short subtitle for workout lists: "5.2 km · 28m", "8,400 steps", "quick log" or "6 exercises". */
+export function workoutSummary(w: Workout): string {
+  const c = cardioOf(w)
+  if (c) {
+    const parts: string[] = []
+    if (c.distance_km) parts.push(`${fmtKm(c.distance_km)} km`)
+    if (c.steps) parts.push(`${c.steps.toLocaleString()} steps`)
+    if (w.duration_min) parts.push(`${w.duration_min}m`)
+    return parts.join(' · ') || 'cardio'
+  }
+  if (isQuickLog(w)) return 'quick log'
+  return `${w.exercises.length} exercise${w.exercises.length === 1 ? '' : 's'}`
+}
+
+/** The most recent detailed (not quick-log, not cardio) session of a split. */
+export function lastSession(workouts: Workout[], dayName: string): Workout | null {
+  const sorted = [...workouts].sort((a, b) => b.local_date.localeCompare(a.local_date) || b.created_at.localeCompare(a.created_at))
+  return sorted.find((w) => w.day_name === dayName && !cardioOf(w) && w.exercises.some((e) => setsOf(e).length > 0)) ?? null
 }
 
 export function volume(sets: SetEntry[]): number {

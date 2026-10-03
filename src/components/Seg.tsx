@@ -16,6 +16,7 @@ export function Seg<T extends string>({
         <SegmentedButton
           key={o.value}
           active={value === o.value}
+          type="button"
           onClick={() => onChange(o.value)}
           className={value === o.value ? 'text-white! font-semibold' : 'text-white/80'}
         >

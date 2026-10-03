@@ -1,8 +1,11 @@
 import { Link, Navbar, Page, Popup } from 'konsta/react'
 import { useMemo, useState } from 'react'
 import { parseISODate, today } from '../lib/dates'
-import type { PlanDay, Workout } from '../lib/types'
+import type { CardioKind, PlanDay, Workout } from '../lib/types'
 import {
+  CARDIO,
+  cardioOf,
+  fmtKm,
   fmtKg,
   formatSet,
   isoDaysAgo,
@@ -102,6 +105,21 @@ function pctChange(now: number, before: number): string | null {
   return `${pct > 0 ? '+' : ''}${pct}%`
 }
 
+/** Per cardio type since `from`: sessions, total km and steps. */
+function cardioTotals(workouts: Workout[], from: string) {
+  const out = new Map<CardioKind, { kind: CardioKind; sessions: number; km: number; steps: number }>()
+  for (const w of workouts) {
+    const c = cardioOf(w)
+    if (!c || w.local_date < from) continue
+    const t = out.get(c.kind) ?? { kind: c.kind, sessions: 0, km: 0, steps: 0 }
+    t.sessions++
+    t.km += c.distance_km ?? 0
+    t.steps += c.steps ?? 0
+    out.set(c.kind, t)
+  }
+  return [...out.values()]
+}
+
 /** Split-by-split strength progress, from workouts logged with "Start workout". */
 export function ProgressSheet({
   opened,
@@ -115,7 +133,8 @@ export function ProgressSheet({
   workouts: Workout[]
   onClose: () => void
 }) {
-  const detailed = workouts.filter((w) => !isQuickLog(w))
+  const detailed = workouts.filter((w) => !isQuickLog(w) && !cardioOf(w))
+  const cardioWeek = cardioTotals(workouts, isoDaysAgo(6))
   const splits = useMemo(() => {
     const names = plan.map((d) => d.name)
     for (const w of detailed) if (!names.includes(w.day_name)) names.push(w.day_name)
@@ -165,6 +184,23 @@ export function ProgressSheet({
               {pctChange(volNow, volPrev) && <div className="text-[12px] text-muted">{pctChange(volNow, volPrev)} vs week before</div>}
             </div>
           </section>
+
+          {cardioWeek.length > 0 && (
+            <section className="rounded-2xl bg-card p-4">
+              <div className="text-[13px] text-muted">Cardio, last 7 days</div>
+              <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
+                {cardioWeek.map((c) => (
+                  <div key={c.kind} className="num text-[20px] font-bold text-exercise">
+                    <span className="mr-1">{CARDIO[c.kind].emoji}</span>
+                    {c.kind === 'walk' && c.steps ? `${c.steps.toLocaleString()} steps` : `${fmtKm(c.km)} km`}
+                    <span className="ml-1 text-[13px] font-normal text-muted">
+                      {c.sessions}× {CARDIO[c.kind].label.toLowerCase()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {splits.length === 0 ? (
             <Empty />
