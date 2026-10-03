@@ -24,7 +24,7 @@ A mobile-first web app for a group of friends (in different countries) to track 
 3. **Authentication → Sign In / Providers → Email**: keep it enabled. Turning off **Confirm email** is optional and makes sign-up instant for friends.
 4. **Authentication → URL Configuration**: set **Site URL** to your Vercel URL (after step 3) so confirmation emails link back to the app.
 5. **Project Settings → API**: copy the **Project URL** and the **anon public** key.
-6. **Password resets**: the app doesn't send reset emails. "Forgot password?" tells people to contact Adwait, who resets it with [`supabase/reset-password.sql`](supabase/reset-password.sql) in the SQL Editor; they then change it under **Profile → Change password**.
+6. **Password reset emails**: Supabase's built-in sender only delivers to your own Supabase team. So that friends get reset emails, connect [Resend](https://resend.com) (free, 3,000 emails/month) under **Authentication → Emails → SMTP Settings**: host `smtp.resend.com`, port `465`, user `resend`, password = Resend API key, sender e.g. `noreply@ak97.in`. Also add `https://gymbuddies.ak97.in/**` under **Authentication → URL Configuration → Redirect URLs**. [`supabase/reset-password.sql`](supabase/reset-password.sql) remains as a manual fallback.
 
 ### 2. Anthropic API key
 
