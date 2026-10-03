@@ -1,8 +1,13 @@
+import { Actions, ActionsButton, ActionsGroup, ActionsLabel } from 'konsta/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Avatar } from '../components/Avatar'
+import { MealDetailSheet, WorkoutDetailSheet } from '../components/DetailSheets'
+import { HistorySheet } from '../components/HistorySheet'
+import { LiveWorkout, loadDraft, startDraft, type LiveDraft } from '../components/LiveWorkout'
 import { LogMealSheet } from '../components/LogMealSheet'
 import { ProfileSheet } from '../components/ProfileSheet'
-import { RecordWorkoutSheet } from '../components/RecordWorkoutSheet'
+import { ProgressSheet } from '../components/ProgressSheet'
+import { QuickLogSheet } from '../components/QuickLogSheet'
 import { fetchFeed, fetchMeals, fetchPlan, fetchWorkouts } from '../lib/api'
 import { toISODate, weekDates } from '../lib/dates'
 import type { FeedEntry, Meal, PlanDay, Profile, Workout } from '../lib/types'
@@ -10,6 +15,7 @@ import { FriendsFeed } from './FriendsFeed'
 import { MeFeed } from './MeFeed'
 
 type Tab = 'me' | 'friends'
+type SheetName = 'chooser' | 'quick' | 'meal' | 'profile' | 'history' | 'progress'
 
 function daysAgo(n: number) {
   const d = new Date()
@@ -25,11 +31,18 @@ export function Home({ profile }: { profile: Profile }) {
   const [feed, setFeed] = useState<FeedEntry[] | null>(null)
   const [feedLoading, setFeedLoading] = useState(false)
   const [feedError, setFeedError] = useState<string | null>(null)
-  const [sheet, setSheet] = useState<'workout' | 'meal' | 'profile' | null>(null)
+  const [sheet, setSheet] = useState<SheetName | null>(null)
+  const [mealDetail, setMealDetail] = useState<Meal | null>(null)
+  const [workoutDetail, setWorkoutDetail] = useState<Workout | null>(null)
+  // In-progress live workout (persisted in localStorage) and whether its screen is showing.
+  const [liveDraft, setLiveDraft] = useState<LiveDraft | null>(() => loadDraft())
+  const [liveOpen, setLiveOpen] = useState(false)
+  const [version, setVersion] = useState(0)
   const pager = useRef<HTMLDivElement>(null)
 
   const loadMine = useCallback(async () => {
-    const [p, w, m] = await Promise.all([fetchPlan(), fetchWorkouts(daysAgo(30)), fetchMeals(weekDates()[0])])
+    // 8 weeks of workouts feed the progress charts and "last time" hints.
+    const [p, w, m] = await Promise.all([fetchPlan(), fetchWorkouts(daysAgo(56)), fetchMeals(weekDates()[0])])
     setPlan(p)
     setWorkouts(w)
     setMeals(m)
@@ -89,6 +102,7 @@ export function Home({ profile }: { profile: Profile }) {
   const refreshAll = () => {
     loadMine().catch(console.error)
     loadFeed()
+    setVersion((v) => v + 1)
   }
 
   // Next day in the plan rotation, based on the last logged workout.
@@ -98,6 +112,13 @@ export function Home({ profile }: { profile: Profile }) {
       ? plan[(plan.findIndex((d) => d.name === lastPlanned.day_name) + 1) % plan.length].name
       : plan[0].name
     : null
+
+  function startLive() {
+    setSheet(null)
+    const existing = loadDraft()
+    setLiveDraft(existing ?? startDraft(suggestedDay ?? 'Other', plan, workouts))
+    setLiveOpen(true)
+  }
 
   return (
     <div className="flex h-full flex-col bg-black">
@@ -121,30 +142,26 @@ export function Home({ profile }: { profile: Profile }) {
               </button>
             ))}
           </nav>
-          <button
-            type="button"
-            aria-label="Profile"
-            className="absolute right-4"
-            onClick={() => setSheet('profile')}
-          >
+          <button type="button" aria-label="Profile" className="absolute right-4" onClick={() => setSheet('profile')}>
             <Avatar url={profile.avatar_url} name={profile.display_name} size={32} />
           </button>
         </div>
       </header>
 
-      <div
-        ref={pager}
-        onScroll={onPagerScroll}
-        className="no-scrollbar flex flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden"
-      >
+      <div ref={pager} onScroll={onPagerScroll} className="no-scrollbar flex flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden">
         <section className="h-full w-full shrink-0 snap-start overflow-y-auto">
           <MeFeed
             profile={profile}
             workouts={workouts}
             meals={meals}
-            onRecordWorkout={() => setSheet('workout')}
+            liveDraft={liveDraft}
+            onRecordWorkout={() => (liveDraft ? setLiveOpen(true) : setSheet('chooser'))}
+            onResumeWorkout={() => setLiveOpen(true)}
             onLogMeal={() => setSheet('meal')}
-            onChanged={refreshAll}
+            onProgress={() => setSheet('progress')}
+            onHistory={() => setSheet('history')}
+            onOpenMeal={setMealDetail}
+            onOpenWorkout={setWorkoutDetail}
           />
         </section>
         <section className="h-full w-full shrink-0 snap-start overflow-y-auto">
@@ -152,15 +169,57 @@ export function Home({ profile }: { profile: Profile }) {
         </section>
       </div>
 
-      <RecordWorkoutSheet
-        opened={sheet === 'workout'}
+      <Actions opened={sheet === 'chooser'} onBackdropClick={() => setSheet(null)}>
+        <ActionsGroup>
+          <ActionsLabel>Record a workout</ActionsLabel>
+          <ActionsButton bold onClick={startLive}>
+            Start workout{suggestedDay ? ` · ${suggestedDay}` : ''}
+            <span className="ml-2 text-[13px] font-normal text-muted">log sets live</span>
+          </ActionsButton>
+          <ActionsButton onClick={() => setSheet('quick')}>
+            Quick log<span className="ml-2 text-[13px] text-muted">just the split</span>
+          </ActionsButton>
+        </ActionsGroup>
+        <ActionsGroup>
+          <ActionsButton onClick={() => setSheet(null)}>Cancel</ActionsButton>
+        </ActionsGroup>
+      </Actions>
+
+      <QuickLogSheet
+        opened={sheet === 'quick'}
         plan={plan}
         suggestedDay={suggestedDay}
         onClose={() => setSheet(null)}
         onSaved={refreshAll}
       />
+      <LiveWorkout
+        draft={liveOpen ? liveDraft : null}
+        plan={plan}
+        history={workouts}
+        onMinimize={() => {
+          setLiveDraft(loadDraft())
+          setLiveOpen(false)
+        }}
+        onFinished={(saved) => {
+          setLiveOpen(false)
+          setLiveDraft(null)
+          if (saved) refreshAll()
+        }}
+      />
       <LogMealSheet opened={sheet === 'meal'} onClose={() => setSheet(null)} onSaved={refreshAll} />
+      <ProgressSheet opened={sheet === 'progress'} plan={plan} workouts={workouts} onClose={() => setSheet(null)} />
+      <HistorySheet
+        opened={sheet === 'history'}
+        calorieTarget={profile.calorie_target}
+        version={version}
+        onClose={() => setSheet(null)}
+        onOpenMeal={setMealDetail}
+        onOpenWorkout={setWorkoutDetail}
+      />
       <ProfileSheet opened={sheet === 'profile'} onClose={() => setSheet(null)} onPlanChanged={setPlan} />
+      {/* Last, so they stack above History. */}
+      <MealDetailSheet meal={mealDetail} onClose={() => setMealDetail(null)} onDeleted={refreshAll} />
+      <WorkoutDetailSheet workout={workoutDetail} onClose={() => setWorkoutDetail(null)} onDeleted={refreshAll} />
     </div>
   )
 }

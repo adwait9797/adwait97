@@ -2,7 +2,9 @@
 
 A mobile-first web app for a group of friends (in different countries) to track workouts and daily calories, and see who has already hit the gym today.
 
-- **For You**: weekly rings (workouts vs. goal, calories today, days under target), a week strip, and big **Record Workout** / **Log Meal** buttons.
+- **For You**: weekly rings (workouts vs. goal, calories today, days under target), a week strip, and big **Record Workout** / **Log Meal** buttons. Tap any meal or workout to see its details; **History** shows every past day.
+- **Record Workout**: **Start workout** logs each set's weight and reps live, with a timer, prefilled from last time (it survives closing the app), or **Quick log** just records the split.
+- **Gym Progress**: per split, each exercise's top set over the last 8 weeks, its change vs. a week earlier, and weekly volume.
 - **Friends**: stories-style row (green ring = trained today, with the day type, e.g. *Push*), weekly leaderboard, and a status card per person with today's calorie total.
 - **AI meal logging**: describe a meal or snap a photo. Claude Haiku 4.5 estimates calories and macros, and you can correct it in chat ("it was 2 rotis"). Manual entry is also available.
 - **Onboarding**: display name, photo, weight, height, workouts per week, goal and calorie target, split (PPL / Upper-Lower / Full Body / Bro / Arnold / Custom), then a suggested plan or your own built from a list of common exercises.

@@ -1,28 +1,36 @@
-import { Actions, ActionsButton, ActionsGroup, ActionsLabel } from 'konsta/react'
-import { useState } from 'react'
-import { IconDumbbell, IconFork } from '../components/icons'
+import { useEffect, useState } from 'react'
+import { IconChevron, IconDumbbell, IconFork, IconTrophy } from '../components/icons'
+import type { LiveDraft } from '../components/LiveWorkout'
 import { Rings } from '../components/Rings'
-import { deleteMeal, deleteWorkout } from '../lib/api'
 import { parseISODate, prettyDate, today, WEEKDAY_LETTERS, weekDates } from '../lib/dates'
 import type { Meal, Profile, Workout } from '../lib/types'
+import { isQuickLog } from '../lib/workoutStats'
 
 export function MeFeed({
   profile,
   workouts,
   meals,
+  liveDraft,
   onRecordWorkout,
+  onResumeWorkout,
   onLogMeal,
-  onChanged,
+  onProgress,
+  onHistory,
+  onOpenMeal,
+  onOpenWorkout,
 }: {
   profile: Profile
   workouts: Workout[]
   meals: Meal[]
+  liveDraft: LiveDraft | null
   onRecordWorkout: () => void
+  onResumeWorkout: () => void
   onLogMeal: () => void
-  onChanged: () => void
+  onProgress: () => void
+  onHistory: () => void
+  onOpenMeal: (m: Meal) => void
+  onOpenWorkout: (w: Workout) => void
 }) {
-  const [selectedMeal, setSelectedMeal] = useState<Meal | null>(null)
-  const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null)
 
   const t = today()
   const week = weekDates(t)
@@ -100,6 +108,8 @@ export function MeFeed({
         </div>
       </section>
 
+      {liveDraft && <ResumeBanner draft={liveDraft} onClick={onResumeWorkout} />}
+
       {/* Primary actions */}
       <section className="fade-up grid grid-cols-2 gap-3">
         <button
@@ -110,7 +120,9 @@ export function MeFeed({
           <IconDumbbell size={28} strokeWidth={2.4} />
           <div>
             <div className="text-[17px] font-bold">Record Workout</div>
-            <div className="text-[13px] opacity-70">{trainedToday ? 'Done today ✓ add another' : 'Log today’s session'}</div>
+            <div className="text-[13px] opacity-70">
+              {liveDraft ? 'Workout in progress' : trainedToday ? 'Done today ✓ add another' : 'Live or quick log'}
+            </div>
           </div>
         </button>
         <button
@@ -126,16 +138,34 @@ export function MeFeed({
         </button>
       </section>
 
+      <button
+        type="button"
+        onClick={onProgress}
+        className="fade-up flex w-full items-center gap-3 rounded-3xl bg-card p-4 text-left active:scale-[0.99]"
+      >
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#ffd60a]/15 text-[#ffd60a]">
+          <IconTrophy size={22} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[17px] font-bold">Track Gym Progress</div>
+          <div className="text-[13px] text-muted">Growth per exercise, split by split</div>
+        </div>
+        <IconChevron size={20} className="text-muted" />
+      </button>
+
       {/* Today's food */}
       <section>
         <div className="mb-2 flex items-baseline justify-between">
           <h2 className="text-[22px] font-bold">Today’s meals</h2>
-          {todayMeals.length > 0 && (
-            <span className="num text-[13px] text-muted">
-              P {macros.p}g · C {macros.c}g · F {macros.f}g
-            </span>
-          )}
+          <button type="button" onClick={onHistory} className="text-[15px] text-primary">
+            History
+          </button>
         </div>
+        {todayMeals.length > 0 && (
+          <p className="num -mt-1 mb-2 text-[13px] text-muted">
+            P {macros.p}g · C {macros.c}g · F {macros.f}g
+          </p>
+        )}
         {todayMeals.length === 0 ? (
           <Empty text="Nothing logged yet today." />
         ) : (
@@ -145,7 +175,7 @@ export function MeFeed({
                 <button
                   type="button"
                   className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left active:bg-card-2"
-                  onClick={() => setSelectedMeal(m)}
+                  onClick={() => onOpenMeal(m)}
                 >
                   <div className="min-w-0">
                     <div className="truncate text-[16px]">{m.name}</div>
@@ -165,7 +195,7 @@ export function MeFeed({
 
       {/* Recent workouts */}
       <section>
-        <h2 className="mb-2 text-[22px] font-bold">Recent workouts</h2>
+        <SectionHeader title="Recent workouts" onSeeAll={onHistory} />
         {workouts.length === 0 ? (
           <Empty text="No workouts yet. Your first one is a tap away." />
         ) : (
@@ -175,7 +205,7 @@ export function MeFeed({
                 <button
                   type="button"
                   className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-card-2"
-                  onClick={() => setSelectedWorkout(w)}
+                  onClick={() => onOpenWorkout(w)}
                 >
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-move/15 text-move">
                     <IconDumbbell size={20} />
@@ -183,8 +213,8 @@ export function MeFeed({
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[16px] font-semibold">{w.day_name}</div>
                     <div className="truncate text-[13px] text-muted">
-                      {w.local_date === t ? 'Today' : prettyDate(w.local_date)} · {w.exercises.filter((e) => e.done).length}{' '}
-                      exercises
+                      {w.local_date === t ? 'Today' : prettyDate(w.local_date)} ·{' '}
+                      {isQuickLog(w) ? 'quick log' : `${w.exercises.length} exercises`}
                     </div>
                   </div>
                   {w.duration_min != null && <span className="num shrink-0 text-[15px] text-stand">{w.duration_min} min</span>}
@@ -195,65 +225,6 @@ export function MeFeed({
         )}
       </section>
 
-      <Actions opened={!!selectedMeal} onBackdropClick={() => setSelectedMeal(null)}>
-        <ActionsGroup>
-          <ActionsLabel>
-            {selectedMeal?.name} · {selectedMeal?.calories} kcal
-            {selectedMeal && selectedMeal.items.length > 0 && (
-              <span className="mt-1 block text-xs">{selectedMeal.items.map((i) => i.name).join(', ')}</span>
-            )}
-          </ActionsLabel>
-          <ActionsButton
-            className="text-move!"
-            onClick={async () => {
-              const m = selectedMeal
-              setSelectedMeal(null)
-              if (m) {
-                await deleteMeal(m.id)
-                onChanged()
-              }
-            }}
-          >
-            Delete meal
-          </ActionsButton>
-        </ActionsGroup>
-        <ActionsGroup>
-          <ActionsButton bold onClick={() => setSelectedMeal(null)}>
-            Cancel
-          </ActionsButton>
-        </ActionsGroup>
-      </Actions>
-
-      <Actions opened={!!selectedWorkout} onBackdropClick={() => setSelectedWorkout(null)}>
-        <ActionsGroup>
-          <ActionsLabel>
-            <span className="block font-semibold">{selectedWorkout?.day_name}</span>
-            {selectedWorkout?.exercises
-              .filter((e) => e.done)
-              .map((e) => `${e.name} ${e.sets}×${e.reps}${e.weight_kg ? ` @ ${e.weight_kg}kg` : ''}`)
-              .join(' · ')}
-            {selectedWorkout?.notes && <span className="mt-1 block italic">“{selectedWorkout.notes}”</span>}
-          </ActionsLabel>
-          <ActionsButton
-            className="text-move!"
-            onClick={async () => {
-              const w = selectedWorkout
-              setSelectedWorkout(null)
-              if (w) {
-                await deleteWorkout(w.id)
-                onChanged()
-              }
-            }}
-          >
-            Delete workout
-          </ActionsButton>
-        </ActionsGroup>
-        <ActionsGroup>
-          <ActionsButton bold onClick={() => setSelectedWorkout(null)}>
-            Cancel
-          </ActionsButton>
-        </ActionsGroup>
-      </Actions>
     </div>
   )
 }
@@ -272,4 +243,44 @@ function Stat({ label, value, unit, color }: { label: string; value: string; uni
 
 function Empty({ text }: { text: string }) {
   return <div className="rounded-2xl bg-card px-4 py-6 text-center text-[15px] text-muted">{text}</div>
+}
+
+function SectionHeader({ title, onSeeAll }: { title: string; onSeeAll: () => void }) {
+  return (
+    <div className="mb-2 flex items-baseline justify-between">
+      <h2 className="text-[22px] font-bold">{title}</h2>
+      <button type="button" onClick={onSeeAll} className="text-[15px] text-primary">
+        See all
+      </button>
+    </div>
+  )
+}
+
+function ResumeBanner({ draft, onClick }: { draft: LiveDraft; onClick: () => void }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 30_000)
+    return () => window.clearInterval(id)
+  }, [])
+  const mins = Math.max(0, Math.floor((now - draft.startedAt) / 60000))
+  const done = draft.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0)
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="fade-up flex w-full items-center gap-3 rounded-3xl bg-move p-4 text-left text-white active:scale-[0.99]"
+    >
+      <span className="relative flex h-3 w-3">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-60" />
+        <span className="relative inline-flex h-3 w-3 rounded-full bg-white" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[17px] font-bold">{draft.dayName} workout in progress</div>
+        <div className="text-[13px] opacity-80">
+          {mins} min · {done} set{done === 1 ? '' : 's'} done · tap to continue
+        </div>
+      </div>
+      <IconChevron size={20} />
+    </button>
+  )
 }
