@@ -1,6 +1,6 @@
 import { Block, Button, List, ListInput, Page, Preloader } from 'konsta/react'
 import { useState, type FormEvent } from 'react'
-import { Rings } from '../components/Rings'
+import { Logo } from '../components/Logo'
 import { Seg } from '../components/Seg'
 import { supabase } from '../lib/supabase'
 
@@ -48,17 +48,8 @@ export function AuthPage() {
     <Page className="pt-safe">
       <div className="flex min-h-full flex-col justify-center pb-10">
         <div className="fade-up flex flex-col items-center px-6 pt-10 text-center">
-          <Rings
-            size={112}
-            stroke={13}
-            rings={[
-              { value: 0.8, max: 1, color: '#fa114f' },
-              { value: 0.65, max: 1, color: '#a6ff00' },
-              { value: 0.9, max: 1, color: '#00d8ff' },
-            ]}
-          />
-          <h1 className="mt-6 text-[34px] font-bold tracking-tight">GymBuddies</h1>
-          <p className="mt-2 max-w-xs text-[17px] text-muted">
+          <Logo />
+          <p className="mt-5 max-w-xs text-[17px] text-muted">
             Track workouts and meals, and see who's already hit the gym today.
           </p>
         </div>
