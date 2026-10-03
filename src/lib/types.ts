@@ -136,6 +136,20 @@ export interface Group {
   name: string
   member_count: number
   is_member: boolean
+  /** You asked to join and are waiting for an admin. */
+  requested?: boolean
+}
+
+/** Admin overview row (admin_users()). */
+export interface AdminUser {
+  user_id: string
+  display_name: string
+  avatar_url: string | null
+  email: string
+  joined_at: string
+  group_ids: string[]
+  requested_group_ids: string[]
+  requested_at: string | null
 }
 
 export type Relation = 'none' | 'requested' | 'incoming' | 'friends'
