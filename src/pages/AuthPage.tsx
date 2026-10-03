@@ -13,20 +13,12 @@ export function AuthPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [forgot, setForgot] = useState(false)
 
-  async function sendReset(e: FormEvent) {
+  // Password resets are handled by Adwait (no email provider is set up), so this only tells
+  // the person who to contact. Opening a reset link he sends still shows "Set a new password".
+  function requestReset(e: FormEvent) {
     e.preventDefault()
     setError(null)
-    setNotice(null)
-    setBusy(true)
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin })
-      if (error) throw error
-      setNotice('If an account exists for that email, a reset link is on its way. Check your inbox (and spam).')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send the reset email')
-    } finally {
-      setBusy(false)
-    }
+    setNotice(`Contact Adwait — he has the password reset link. Send him your email (${email.trim()}) and he'll get you back in.`)
   }
 
   async function submit(e: FormEvent) {
@@ -72,9 +64,9 @@ export function AuthPage() {
         </div>
 
         {forgot ? (
-          <form onSubmit={sendReset} className="mt-8">
+          <form onSubmit={requestReset} className="mt-8">
             <h2 className="px-4 text-center text-[22px] font-bold">Reset your password</h2>
-            <p className="mt-1 px-8 text-center text-[15px] text-muted">We'll email you a link to set a new one.</p>
+            <p className="mt-1 px-8 text-center text-[15px] text-muted">Enter the email you signed up with.</p>
             <List strongIos insetIos>
               <ListInput
                 label="Email"
@@ -88,8 +80,8 @@ export function AuthPage() {
             {error && <p className="px-8 text-center text-sm text-move">{error}</p>}
             {notice && <p className="px-8 text-center text-sm text-stand">{notice}</p>}
             <Block>
-              <Button large rounded type="submit" disabled={busy || !email.trim()} className="font-semibold text-black">
-                {busy ? <Preloader className="h-5! w-5!" /> : 'Send reset link'}
+              <Button large rounded type="submit" disabled={!email.trim()} className="font-semibold text-black">
+                Reset password
               </Button>
             </Block>
             <button
