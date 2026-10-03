@@ -196,6 +196,19 @@ export function Onboarding() {
                 )
               })}
               <p className="px-1 text-[13px] text-muted">You can also add individual friends from other groups later.</p>
+              {groups && groups.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    // No group: they can join one or add friends later from the Friends tab.
+                    setGroupId(null)
+                    setStep(step + 1)
+                  }}
+                  className="mx-auto block py-2 text-[15px] font-medium text-primary"
+                >
+                  Skip for now
+                </button>
+              )}
             </div>
           </>
         )}
