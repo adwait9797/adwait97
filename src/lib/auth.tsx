@@ -2,7 +2,7 @@ import type { Session } from '@supabase/supabase-js'
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { fetchProfile, saveProfile } from './api'
 import { deviceTimezone } from './dates'
-import { openedFromRecoveryLink, supabase } from './supabase'
+import { migratedRefreshToken, openedFromRecoveryLink, supabase } from './supabase'
 import type { Profile } from './types'
 
 interface AuthState {
@@ -44,9 +44,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let active = true
     supabase.auth.getSession().then(async ({ data }) => {
       if (!active) return
-      setSession(data.session)
+      let current = data.session
+      // Arrived from the old address with its login: restore it here (unless already signed in).
+      if (!current && migratedRefreshToken) {
+        const { data: refreshed } = await supabase.auth.refreshSession({ refresh_token: migratedRefreshToken })
+        current = refreshed.session
+        if (!active) return
+      }
+      setSession(current)
       try {
-        await loadProfile(data.session)
+        await loadProfile(current)
       } finally {
         if (active) setLoading(false)
       }

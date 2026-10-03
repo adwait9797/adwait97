@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { MIGRATE_PARAM } from './domainRedirect'
 
 const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -14,6 +15,20 @@ export const authLinkError = (() => {
   const params = new URLSearchParams(window.location.hash.slice(1))
   const msg = params.get('error_description')
   return msg ? msg.replace(/\+/g, ' ') : null
+})()
+
+/**
+ * Refresh token handed over from the old address (see domainRedirect.ts). Taken out of the URL
+ * right away so it doesn't linger in the address bar or history; AuthProvider uses it to sign in.
+ */
+export const migratedRefreshToken = (() => {
+  const params = new URLSearchParams(window.location.hash.slice(1))
+  const token = params.get(MIGRATE_PARAM)
+  if (!token) return null
+  params.delete(MIGRATE_PARAM)
+  const rest = params.toString()
+  window.history.replaceState(null, '', window.location.pathname + window.location.search + (rest ? `#${rest}` : ''))
+  return token
 })()
 
 export const supabase = createClient(url ?? 'http://localhost', anonKey ?? 'missing', {
