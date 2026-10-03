@@ -4,7 +4,7 @@ import { addMeal, analyzeMeal, type ChatTurn } from '../lib/api'
 import { today } from '../lib/dates'
 import { blobToBase64, resizeImage } from '../lib/image'
 import { useDictation } from '../lib/useDictation'
-import type { MealEstimate } from '../lib/types'
+import type { MealEstimate, MealItem } from '../lib/types'
 import { IconCamera, IconClose, IconMic, IconSend, IconSparkle } from './icons'
 
 interface Bubble {
@@ -107,13 +107,31 @@ export function LogMealSheet({ opened, onClose, onSaved }: { opened: boolean; on
     }
   }
 
+  // Manual tweak on the latest card: swap it in everywhere, and tell the AI so later corrections build on it.
+  function editEstimate(prev: MealEstimate, next: MealEstimate) {
+    setEstimate(next)
+    setBubbles((bs) => bs.map((b) => (b.estimate === prev ? { ...b, estimate: next } : b)))
+    setTurns((ts) => {
+      const i = ts.map((t) => t.role).lastIndexOf('assistant')
+      if (i < 0) return ts
+      const note = `Current estimate (adjusted by the user): ${JSON.stringify({ meal_name: next.meal_name, items: next.items, total: next.total })}`
+      return ts.map((t, j) => (j === i ? { ...t, text: `${t.text.split('\nCurrent estimate')[0]}\n${note}` } : t))
+    })
+  }
+
   async function save(e: MealEstimate) {
     setSaving(true)
     try {
       await addMeal({
         local_date: today(),
         name: e.meal_name || 'Meal',
-        items: e.items,
+        items: e.items.map((it) => ({
+          ...it,
+          calories: Math.round(it.calories),
+          protein_g: Math.round(it.protein_g),
+          carbs_g: Math.round(it.carbs_g),
+          fat_g: Math.round(it.fat_g),
+        })),
         calories: Math.round(e.total.calories),
         protein_g: Math.round(e.total.protein_g),
         carbs_g: Math.round(e.total.carbs_g),
@@ -176,6 +194,7 @@ export function LogMealSheet({ opened, onClose, onSaved }: { opened: boolean; on
                         latest={b.estimate === estimate}
                         saving={saving}
                         onSave={() => save(b.estimate!)}
+                        onEdit={(next) => editEstimate(b.estimate!, next)}
                       />
                     )}
                   </div>
@@ -281,16 +300,107 @@ export function LogMealSheet({ opened, onClose, onSaved }: { opened: boolean; on
   )
 }
 
+const round = (n: number) => Math.round(n)
+
+/** Change one item's calories; its macros scale with it and the totals move by the difference. */
+function withItemCalories(e: MealEstimate, index: number, calories: number): MealEstimate {
+  const old = e.items[index]
+  const ratio = old.calories > 0 ? calories / old.calories : 1
+  const item: MealItem = {
+    ...old,
+    calories,
+    protein_g: old.protein_g * ratio,
+    carbs_g: old.carbs_g * ratio,
+    fat_g: old.fat_g * ratio,
+  }
+  return {
+    ...e,
+    items: e.items.map((it, i) => (i === index ? item : it)),
+    total: {
+      calories: Math.max(0, e.total.calories + item.calories - old.calories),
+      protein_g: Math.max(0, e.total.protein_g + item.protein_g - old.protein_g),
+      carbs_g: Math.max(0, e.total.carbs_g + item.carbs_g - old.carbs_g),
+      fat_g: Math.max(0, e.total.fat_g + item.fat_g - old.fat_g),
+    },
+  }
+}
+
+/** Change the total; every item and macro scales by the same factor. */
+function withTotalCalories(e: MealEstimate, calories: number): MealEstimate {
+  const ratio = e.total.calories > 0 ? calories / e.total.calories : 1
+  const scale = <T extends { calories: number; protein_g: number; carbs_g: number; fat_g: number }>(x: T): T => ({
+    ...x,
+    calories: x.calories * ratio,
+    protein_g: x.protein_g * ratio,
+    carbs_g: x.carbs_g * ratio,
+    fat_g: x.fat_g * ratio,
+  })
+  return { ...e, items: e.items.map(scale), total: { ...scale(e.total), calories } }
+}
+
+/** A number that turns into an input when tapped; commits on blur or Enter. */
+function TapNumber({
+  value,
+  onCommit,
+  className,
+  inputClassName,
+  label,
+}: {
+  value: number
+  onCommit: (n: number) => void
+  className: string
+  inputClassName: string
+  label: string
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+  if (draft === null) {
+    return (
+      <button
+        type="button"
+        aria-label={`Edit ${label}`}
+        onClick={() => setDraft(String(round(value)))}
+        className={`${className} rounded-md underline decoration-white/25 decoration-dashed underline-offset-4 active:bg-white/10`}
+      >
+        {round(value)}
+      </button>
+    )
+  }
+  const commit = () => {
+    const n = Math.round(Number(draft))
+    if (draft.trim() !== '' && Number.isFinite(n) && n >= 0 && n <= 20000 && n !== round(value)) onCommit(n)
+    setDraft(null)
+  }
+  return (
+    <input
+      autoFocus
+      type="number"
+      inputMode="numeric"
+      aria-label={label}
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onFocus={(e) => e.target.select()}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur()
+        if (e.key === 'Escape') setDraft(null)
+      }}
+      className={`${inputClassName} num rounded-md bg-card-2 outline-none ring-2 ring-primary`}
+    />
+  )
+}
+
 function EstimateCard({
   estimate,
   latest,
   saving,
   onSave,
+  onEdit,
 }: {
   estimate: MealEstimate
   latest: boolean
   saving: boolean
   onSave: () => void
+  onEdit: (next: MealEstimate) => void
 }) {
   const t = estimate.total
   return (
@@ -299,35 +409,58 @@ function EstimateCard({
         <span className="text-[17px] font-semibold">{estimate.meal_name}</span>
         {estimate.confidence === 'low' && <span className="text-xs text-[#ff9f0a]">rough guess</span>}
       </div>
-      <div className="num mt-1 text-[34px] leading-none font-bold text-exercise">
-        {Math.round(t.calories)}
+      <div className="num mt-1 flex items-baseline text-[34px] leading-none font-bold text-exercise">
+        {latest ? (
+          <TapNumber
+            value={t.calories}
+            label="total calories"
+            onCommit={(n) => onEdit(withTotalCalories(estimate, n))}
+            className="-mx-1 px-1"
+            inputClassName="w-36 px-2 py-0.5 text-[34px] font-bold text-exercise"
+          />
+        ) : (
+          round(t.calories)
+        )}
         <span className="ml-1 text-base font-semibold text-muted">kcal</span>
       </div>
       <div className="num mt-2 flex gap-4 text-[13px]">
         <span>
-          <b className="text-move">P</b> {Math.round(t.protein_g)}g
+          <b className="text-move">P</b> {round(t.protein_g)}g
         </span>
         <span>
-          <b className="text-stand">C</b> {Math.round(t.carbs_g)}g
+          <b className="text-stand">C</b> {round(t.carbs_g)}g
         </span>
         <span>
-          <b className="text-[#ff9f0a]">F</b> {Math.round(t.fat_g)}g
+          <b className="text-[#ff9f0a]">F</b> {round(t.fat_g)}g
         </span>
       </div>
       <ul className="mt-3 space-y-1 border-t border-white/10 pt-3 text-[14px]">
         {estimate.items.map((it, i) => (
-          <li key={i} className="flex justify-between gap-3">
+          <li key={i} className="flex items-center justify-between gap-3">
             <span className="min-w-0 truncate">
               {it.name} <span className="text-muted">· {it.quantity}</span>
             </span>
-            <span className="num shrink-0 text-muted">{Math.round(it.calories)}</span>
+            {latest ? (
+              <TapNumber
+                value={it.calories}
+                label={`${it.name} calories`}
+                onCommit={(n) => onEdit(withItemCalories(estimate, i, n))}
+                className="num shrink-0 px-1 text-muted"
+                inputClassName="w-20 shrink-0 px-2 py-0.5 text-right text-[14px] text-white"
+              />
+            ) : (
+              <span className="num shrink-0 text-muted">{round(it.calories)}</span>
+            )}
           </li>
         ))}
       </ul>
       {latest && (
-        <Button rounded large className="mt-4 font-semibold text-black" disabled={saving} onClick={onSave}>
-          {saving ? <Preloader className="h-5! w-5!" /> : 'Save meal'}
-        </Button>
+        <>
+          <p className="mt-3 text-[12px] text-muted">Tap any calorie number to adjust it.</p>
+          <Button rounded large className="mt-3 font-semibold text-black" disabled={saving} onClick={onSave}>
+            {saving ? <Preloader className="h-5! w-5!" /> : 'Save meal'}
+          </Button>
+        </>
       )}
     </div>
   )
