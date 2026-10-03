@@ -10,9 +10,12 @@
   --color-card: #1c1c1e;
   --color-card-2: #2c2c2e;
   --color-muted: #8e8e93;
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'Inter',
-    system-ui, sans-serif;
-  --font-rounded: ui-rounded, 'SF Pro Rounded', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  /* Apple's SF Pro on iPhone/Mac (system font, can't be self-hosted). Everywhere else, Inter:
+     the closest open font to SF, bundled with the app and only downloaded when SF isn't available. */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Inter Variable', sans-serif;
+  --font-ios: var(--font-sans);
+  /* SF Pro Rounded for numbers, like the Fitness app. */
+  --font-rounded: ui-rounded, 'SF Pro Rounded', -apple-system, BlinkMacSystemFont, 'Inter Variable', sans-serif;
 }
 
 html,
@@ -28,6 +31,7 @@ body,
 
 body {
   font-family: var(--font-sans);
+  font-optical-sizing: auto;
 }
 
 /* iOS zooms into inputs below 16px; keep them at 16px. */
