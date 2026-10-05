@@ -73,7 +73,14 @@ export function topSet(sets: SetEntry[]): SetEntry | null {
   return best
 }
 
+export function isCardioSet(s: SetEntry): boolean {
+  return s.minutes != null || s.distance_km != null
+}
+
 export function formatSet(s: SetEntry): string {
+  if (isCardioSet(s)) {
+    return [s.minutes ? `${fmtKg(s.minutes)} min` : null, s.distance_km ? `${fmtKm(s.distance_km)} km` : null].filter(Boolean).join(' · ') || '–'
+  }
   return s.weight_kg ? `${fmtKg(s.weight_kg)} kg × ${s.reps}` : `${s.reps} reps`
 }
 
@@ -129,7 +136,7 @@ export function splitProgress(workouts: Workout[], dayName: string): ExercisePro
   const byExercise = new Map<string, SessionPoint[]>()
   for (const w of sessions) {
     for (const e of w.exercises) {
-      const sets = setsOf(e)
+      const sets = setsOf(e).filter((x) => !isCardioSet(x))
       const top = topSet(sets)
       if (!top) continue
       const list = byExercise.get(e.name) ?? []

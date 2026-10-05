@@ -76,6 +76,7 @@ export function MeFeed({
               color={over ? 'text-move' : 'text-exercise'}
               value={`${todayKcal.toLocaleString()}/${profile.calorie_target.toLocaleString()}`}
               unit="kcal"
+              sub={`Protein ${Math.round(macros.p)}g · Fat ${Math.round(macros.f)}g`}
             />
             <Stat label="Days under target" color="text-stand" value={`${underDays}/${daysElapsed}`} unit="" />
           </div>
@@ -229,7 +230,7 @@ export function MeFeed({
   )
 }
 
-function Stat({ label, value, unit, color }: { label: string; value: string; unit: string; color: string }) {
+function Stat({ label, value, unit, color, sub }: { label: string; value: string; unit: string; color: string; sub?: string }) {
   return (
     <div>
       <div className="text-[13px] font-medium text-white/90">{label}</div>
@@ -237,6 +238,7 @@ function Stat({ label, value, unit, color }: { label: string; value: string; uni
         {value}
         {unit && <span className="ml-1 text-[13px] font-semibold">{unit}</span>}
       </div>
+      {sub && <div className="num text-[12px] text-muted">{sub}</div>}
     </div>
   )
 }

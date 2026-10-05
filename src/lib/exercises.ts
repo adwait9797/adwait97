@@ -76,7 +76,29 @@ export const EXERCISE_LIBRARY: Record<string, string[]> = {
     'Russian Twist',
     'Crunches',
   ],
-  Cardio: ['Treadmill', 'Incline Walk', 'Stationary Bike', 'Rowing Machine', 'Stair Climber', 'Elliptical', 'Jump Rope'],
+  Cardio: [
+    'Treadmill',
+    'Incline Walk',
+    'Outdoor Run',
+    'Walking',
+    'Stationary Bike',
+    'Outdoor Cycling',
+    'Spin Bike',
+    'Assault Bike',
+    'Rowing Machine',
+    'Ski Erg',
+    'Stair Climber',
+    'Elliptical',
+    'Swimming',
+    'Jump Rope',
+  ],
+}
+
+/** Cardio is logged as minutes + distance instead of weight × reps. */
+export const CARDIO_EXERCISES = new Set(EXERCISE_LIBRARY.Cardio)
+
+export function isCardioExercise(name: string): boolean {
+  return CARDIO_EXERCISES.has(name)
 }
 
 export const ALL_EXERCISES = Object.entries(EXERCISE_LIBRARY).flatMap(([group, names]) =>

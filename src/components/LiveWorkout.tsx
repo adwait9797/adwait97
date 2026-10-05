@@ -2,12 +2,14 @@ import { Dialog, DialogButton, Link, Navbar, Page, Popup, Preloader } from 'kons
 import { useEffect, useState } from 'react'
 import { addWorkout } from '../lib/api'
 import { timeAgo, toISODate } from '../lib/dates'
-import type { PlanDay, Workout, WorkoutExercise } from '../lib/types'
-import { formatSet, lastPerformance, lastSession, setsOf } from '../lib/workoutStats'
+import type { PlanDay, SetEntry, Workout, WorkoutExercise } from '../lib/types'
+import { isCardioExercise } from '../lib/exercises'
+import { formatSet, isCardioSet, lastPerformance, lastSession, setsOf } from '../lib/workoutStats'
 import { ExercisePicker } from './ExercisePicker'
 import { IconCheck, IconClose, IconPlus } from './icons'
 import { DayChips, dayOptions } from './QuickLogSheet'
 
+/** For cardio exercises, `weight` holds the distance in km and `reps` the minutes. */
 interface DraftSet {
   weight: string
   reps: string
@@ -17,6 +19,8 @@ interface DraftSet {
 interface DraftExercise {
   name: string
   sets: DraftSet[]
+  /** Treadmill, bike, rower…: logged as minutes + km instead of kg × reps. */
+  cardio?: boolean
 }
 
 export interface LiveDraft {
@@ -57,6 +61,17 @@ function exercisesFor(dayName: string, plan: PlanDay[], history: Workout[]): Dra
 /** Prefill sets from the last time this exercise was done, else from the plan. */
 function newExercise(name: string, history: Workout[], planSets = 3, planReps = 10): DraftExercise {
   const last = lastPerformance(history, name)
+  if (isCardioExercise(name)) {
+    // One interval by default; plan "reps" is the target minutes for cardio.
+    const prev = last?.sets.filter(isCardioSet) ?? []
+    return {
+      name,
+      cardio: true,
+      sets: prev.length
+        ? prev.map((p) => ({ weight: p.distance_km ? String(p.distance_km) : '', reps: p.minutes ? String(p.minutes) : '', done: false }))
+        : [{ weight: '', reps: planReps ? String(planReps) : '', done: false }],
+    }
+  }
   const count = Math.max(1, last?.sets.length ?? planSets)
   return {
     name,
@@ -74,10 +89,19 @@ function newExercise(name: string, history: Workout[], planSets = 3, planReps = 
 /** Exactly what was done last session: same exercises, order, weights and reps. */
 function exercisesFromSession(w: Workout): DraftExercise[] {
   return w.exercises
-    .map((e) => ({
-      name: e.name,
-      sets: setsOf(e).map((st) => ({ weight: st.weight_kg ? String(st.weight_kg) : '', reps: String(st.reps), done: false })),
-    }))
+    .map((e) => {
+      const sets = setsOf(e)
+      const cardio = isCardioExercise(e.name) || sets.some(isCardioSet)
+      return {
+        name: e.name,
+        cardio,
+        sets: sets.map((st) =>
+          cardio
+            ? { weight: st.distance_km ? String(st.distance_km) : '', reps: st.minutes ? String(st.minutes) : '', done: false }
+            : { weight: st.weight_kg ? String(st.weight_kg) : '', reps: String(st.reps), done: false },
+        ),
+      }
+    })
     .filter((e) => e.sets.length > 0)
 }
 
@@ -166,9 +190,20 @@ export function LiveWorkout({
     try {
       const exercises: WorkoutExercise[] = draft!.exercises
         .map((e) => {
-          const log = e.sets
+          const log: SetEntry[] = e.sets
             .filter((s) => s.done)
-            .map((s) => ({ weight_kg: Number(s.weight) > 0 ? Number(s.weight) : null, reps: Math.max(1, Math.round(Number(s.reps) || 1)) }))
+            .map((s) =>
+              e.cardio
+                ? {
+                    weight_kg: null,
+                    reps: 0,
+                    minutes: Number(s.reps) > 0 ? Math.min(600, Math.round(Number(s.reps) * 10) / 10) : null,
+                    distance_km: Number(s.weight) > 0 ? Math.min(500, Math.round(Number(s.weight) * 100) / 100) : null,
+                  }
+                : { weight_kg: Number(s.weight) > 0 ? Number(s.weight) : null, reps: Math.max(1, Math.round(Number(s.reps) || 1)) },
+            )
+            // A ticked cardio interval with neither minutes nor km has nothing to save.
+            .filter((s) => !e.cardio || s.minutes || s.distance_km)
           const top = Math.max(0, ...log.map((s) => s.weight_kg ?? 0))
           return {
             name: e.name,
@@ -262,29 +297,54 @@ export function LiveWorkout({
 
                 <div className="mt-3 grid grid-cols-[2rem_1fr_1fr_2.75rem] items-center gap-x-2 gap-y-2 text-center">
                   <span className="text-[11px] font-semibold text-muted uppercase">Set</span>
-                  <span className="text-[11px] font-semibold text-muted uppercase">kg</span>
-                  <span className="text-[11px] font-semibold text-muted uppercase">Reps</span>
+                  <span className="text-[11px] font-semibold text-muted uppercase">{ex.cardio ? 'Min' : 'kg'}</span>
+                  <span className="text-[11px] font-semibold text-muted uppercase">{ex.cardio ? 'Km' : 'Reps'}</span>
                   <span />
                   {ex.sets.map((s, si) => (
                     <div key={si} className="contents">
                       <span className={`num text-[15px] font-semibold ${s.done ? 'text-primary' : 'text-muted'}`}>{si + 1}</span>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        placeholder="–"
-                        value={s.weight}
-                        onChange={(e) => patchSet(ei, si, { weight: e.target.value })}
-                        className={`num h-10 w-full rounded-lg text-center outline-none focus:ring-2 focus:ring-primary ${s.done ? 'bg-primary/15' : 'bg-card-2'}`}
-                        aria-label={`Set ${si + 1} weight`}
-                      />
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        value={s.reps}
-                        onChange={(e) => patchSet(ei, si, { reps: e.target.value })}
-                        className={`num h-10 w-full rounded-lg text-center outline-none focus:ring-2 focus:ring-primary ${s.done ? 'bg-primary/15' : 'bg-card-2'}`}
-                        aria-label={`Set ${si + 1} reps`}
-                      />
+                      {ex.cardio ? (
+                        <>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            placeholder="–"
+                            value={s.reps}
+                            onChange={(e) => patchSet(ei, si, { reps: e.target.value })}
+                            className={`num h-10 w-full rounded-lg text-center outline-none focus:ring-2 focus:ring-primary ${s.done ? 'bg-primary/15' : 'bg-card-2'}`}
+                            aria-label={`Interval ${si + 1} minutes`}
+                          />
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            placeholder="–"
+                            value={s.weight}
+                            onChange={(e) => patchSet(ei, si, { weight: e.target.value })}
+                            className={`num h-10 w-full rounded-lg text-center outline-none focus:ring-2 focus:ring-primary ${s.done ? 'bg-primary/15' : 'bg-card-2'}`}
+                            aria-label={`Interval ${si + 1} distance in km`}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            placeholder="–"
+                            value={s.weight}
+                            onChange={(e) => patchSet(ei, si, { weight: e.target.value })}
+                            className={`num h-10 w-full rounded-lg text-center outline-none focus:ring-2 focus:ring-primary ${s.done ? 'bg-primary/15' : 'bg-card-2'}`}
+                            aria-label={`Set ${si + 1} weight`}
+                          />
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            value={s.reps}
+                            onChange={(e) => patchSet(ei, si, { reps: e.target.value })}
+                            className={`num h-10 w-full rounded-lg text-center outline-none focus:ring-2 focus:ring-primary ${s.done ? 'bg-primary/15' : 'bg-card-2'}`}
+                            aria-label={`Set ${si + 1} reps`}
+                          />
+                        </>
+                      )}
                       <button
                         type="button"
                         aria-label={s.done ? `Undo set ${si + 1}` : `Complete set ${si + 1}`}
@@ -306,12 +366,12 @@ export function LiveWorkout({
                       update({
                         ...draft,
                         exercises: draft.exercises.map((e, i) =>
-                          i === ei ? { ...e, sets: [...e.sets, { weight: prev?.weight ?? '', reps: prev?.reps ?? '10', done: false }] } : e,
+                          i === ei ? { ...e, sets: [...e.sets, ex.cardio ? { weight: '', reps: '', done: false } : { weight: prev?.weight ?? '', reps: prev?.reps ?? '10', done: false }] } : e,
                         ),
                       })
                     }}
                   >
-                    <IconPlus size={18} /> Add set
+                    <IconPlus size={18} /> {ex.cardio ? 'Add interval' : 'Add set'}
                   </button>
                   {ex.sets.length > 1 && (
                     <button

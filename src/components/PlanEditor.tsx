@@ -1,5 +1,6 @@
 import { Button } from 'konsta/react'
 import { useState } from 'react'
+import { isCardioExercise } from '../lib/exercises'
 import type { PlanDay } from '../lib/types'
 import { ExercisePicker } from './ExercisePicker'
 import { IconClose, IconPlus, IconTrash } from './icons'
@@ -55,16 +56,27 @@ export function PlanEditor({ days, onChange }: { days: PlanDay[]; onChange: (d: 
             {day.exercises.map((ex, k) => (
               <li key={k} className="flex items-center gap-2 py-2.5">
                 <span className="min-w-0 flex-1 truncate text-[15px]">{ex.name}</span>
-                <NumberCell
-                  label="sets"
-                  value={ex.sets}
-                  onChange={(v) => update(i, { exercises: day.exercises.map((e, m) => (m === k ? { ...e, sets: v } : e)) })}
-                />
-                <NumberCell
-                  label="reps"
-                  value={ex.reps}
-                  onChange={(v) => update(i, { exercises: day.exercises.map((e, m) => (m === k ? { ...e, reps: v } : e)) })}
-                />
+                {isCardioExercise(ex.name) ? (
+                  // Cardio: the plan stores target minutes in reps.
+                  <NumberCell
+                    label="min"
+                    value={ex.reps}
+                    onChange={(v) => update(i, { exercises: day.exercises.map((e, m) => (m === k ? { ...e, sets: 1, reps: v } : e)) })}
+                  />
+                ) : (
+                  <>
+                    <NumberCell
+                      label="sets"
+                      value={ex.sets}
+                      onChange={(v) => update(i, { exercises: day.exercises.map((e, m) => (m === k ? { ...e, sets: v } : e)) })}
+                    />
+                    <NumberCell
+                      label="reps"
+                      value={ex.reps}
+                      onChange={(v) => update(i, { exercises: day.exercises.map((e, m) => (m === k ? { ...e, reps: v } : e)) })}
+                    />
+                  </>
+                )}
                 <button
                   type="button"
                   aria-label={`Remove ${ex.name}`}
@@ -101,7 +113,9 @@ export function PlanEditor({ days, onChange }: { days: PlanDay[]; onChange: (d: 
         onPick={(name) => {
           if (pickerFor === null) return
           const day = days[pickerFor]
-          update(pickerFor, { exercises: [...day.exercises, { name, sets: 3, reps: 10 }] })
+          update(pickerFor, {
+            exercises: [...day.exercises, isCardioExercise(name) ? { name, sets: 1, reps: 20 } : { name, sets: 3, reps: 10 }],
+          })
         }}
       />
     </div>

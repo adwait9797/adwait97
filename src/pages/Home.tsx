@@ -1,7 +1,6 @@
 import { Actions, ActionsButton, ActionsGroup, ActionsLabel } from 'konsta/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Avatar } from '../components/Avatar'
-import { CardioSheet } from '../components/CardioSheet'
 import { MealDetailSheet, WorkoutDetailSheet } from '../components/DetailSheets'
 import { HistorySheet } from '../components/HistorySheet'
 import { LiveWorkout, loadDraft, startDraft, type LiveDraft } from '../components/LiveWorkout'
@@ -16,7 +15,7 @@ import { FriendsFeed } from './FriendsFeed'
 import { MeFeed } from './MeFeed'
 
 type Tab = 'me' | 'friends'
-type SheetName = 'chooser' | 'quick' | 'cardio' | 'meal' | 'profile' | 'history' | 'progress'
+type SheetName = 'chooser' | 'quick' | 'meal' | 'profile' | 'history' | 'progress'
 
 function daysAgo(n: number) {
   const d = new Date()
@@ -201,9 +200,6 @@ export function Home({ profile }: { profile: Profile }) {
             Start workout{suggestedDay ? ` · ${suggestedDay}` : ''}
             <span className="ml-2 text-[13px] font-normal text-muted">log sets live</span>
           </ActionsButton>
-          <ActionsButton onClick={() => setSheet('cardio')}>
-            Cardio<span className="ml-2 text-[13px] text-muted">run, cycle or steps</span>
-          </ActionsButton>
           <ActionsButton onClick={() => setSheet('quick')}>
             Quick log<span className="ml-2 text-[13px] text-muted">just the split</span>
           </ActionsButton>
@@ -220,7 +216,6 @@ export function Home({ profile }: { profile: Profile }) {
         onClose={() => setSheet(null)}
         onSaved={refreshAll}
       />
-      <CardioSheet opened={sheet === 'cardio'} onClose={() => setSheet(null)} onSaved={refreshAll} />
       <LiveWorkout
         draft={liveOpen ? liveDraft : null}
         plan={plan}

@@ -32,10 +32,15 @@ export interface PlanDay {
   exercises: PlanExercise[]
 }
 
-/** One logged set during a live workout. weight_kg is null for bodyweight exercises. */
+/**
+ * One logged set during a live workout. weight_kg is null for bodyweight exercises.
+ * Cardio machines log minutes / distance_km instead, with reps = 0.
+ */
 export interface SetEntry {
   weight_kg: number | null
   reps: number
+  minutes?: number | null
+  distance_km?: number | null
 }
 
 /**
@@ -46,7 +51,7 @@ export interface WorkoutExercise extends PlanExercise {
   weight_kg: number | null
   done: boolean
   set_log?: SetEntry[]
-  /** Cardio logs (run / cycle / steps) store one entry with sets = 0 and this filled in. */
+  /** Older standalone cardio logs (run / cycle / steps) store one entry with sets = 0 and this filled in. */
   cardio?: CardioEntry
 }
 
